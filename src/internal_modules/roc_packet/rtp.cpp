@@ -18,7 +18,8 @@ RTP::RTP()
     , duration(0)
     , capture_timestamp(0)
     , marker(false)
-    , payload_type(0) {
+    , payload_type(0)
+    , fec_recovered(false) {
 }
 
 int RTP::compare(const RTP& other) const {

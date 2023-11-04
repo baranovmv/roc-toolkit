@@ -44,6 +44,11 @@ struct UDP {
     uv_udp_send_t request;
 
     UDP();
+
+        //! It points to a moment when the packet was transferred to a sink-thread, that
+    //! "consumes" this packet. The reason to have it separate is that this allows
+    //! us to account additional jitter introduced by thread-switch time.
+    core::nanoseconds_t enqueue_ts;
 };
 
 } // namespace packet

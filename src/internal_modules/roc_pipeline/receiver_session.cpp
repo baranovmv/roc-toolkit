@@ -245,6 +245,7 @@ status::StatusCode ReceiverSession::route_packet(const packet::PacketPtr& packet
     roc_panic_if(!is_valid());
 
     return packet_router_->write(packet);
+    packet->udp()->enqueue_ts = core::timestamp(core::ClockUnix);
 }
 
 bool ReceiverSession::refresh(core::nanoseconds_t current_time,
