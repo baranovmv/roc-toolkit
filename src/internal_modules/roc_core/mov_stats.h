@@ -37,9 +37,13 @@ public:
         , movsum_(T(0))
         , movsum2_(T(0))
         , mov_var_(T(0))
-        , full_(false)
         , mov_max_cntr_(0)
+        , full_(false)
         , first_(true)
+        , queue_max_(arena, win_len+1)
+        , curr_max_(T(0))
+        , queue_min_(arena, win_len+1)
+        , curr_min_(T(0))
     {
         if(!buffer_.resize(win_len)){
             roc_panic("MovStats: can't allocate storage for the ring buffer");
@@ -63,29 +67,60 @@ public:
         movsum_ += x - x_old;
         movsum2_ += x2 - x2_old;
 
-        if (first_) {
-            first_ = false;
-            mov_max_ = x;
-            mov_max_cntr_++;
-        } else {
-            if (x > mov_max_) {
-                mov_max_ = x;
-                mov_max_cntr_ = 1;
-            } else if (x == mov_max_) {
-                mov_max_cntr_++;
-            }
-
-            if (mov_max_ == x_old) {
-                mov_
-            }
-        }
-
         buffer_i_++;
         if (buffer_i_ == win_len_) {
             buffer_i_ = 0;
             full_ = true;
         }
 
+        slide_max(x, x_old);
+        slide_min(x, x_old);
+    }
+
+    // Keeping a sliding max by using a sorted deque.
+    // The wedge is always sorted in descending order.
+    // The current max is always at the front of the wedge.
+    // https://www.geeksforgeeks.org/sliding-window-maximum-maximum-of-all-subarrays-of-size-k/
+    void slide_max(const T& x, const T x_old) {
+        if (queue_max_.is_empty()) {
+            queue_max_.push_back(x);
+            curr_max_ = x;
+        } else {
+            if (queue_max_.front() == x_old) {
+                queue_max_.pop_front();
+                curr_max_ = queue_max_.is_empty() ? x : queue_max_.front();
+            }
+            while (!queue_max_.is_empty() && queue_max_.back() < x) {
+                queue_max_.pop_back();
+            }
+            if (queue_max_.is_empty()) {
+                curr_max_ = x;
+            }
+            queue_max_.push_back(x);
+        }
+    }
+
+    // Keeping a sliding min by using a sorted deque.
+    // The wedge is always sorted in ascending order.
+    // The current min is always at the front of the wedge.
+    // https://www.geeksforgeeks.org/sliding-window-maximum-maximum-of-all-subarrays-of-size-k/
+    void slide_min(const T& x, const T x_old) {
+        if (queue_min_.is_empty()) {
+            queue_min_.push_back(x);
+            curr_min_ = x;
+        } else {
+            if (queue_min_.front() == x_old) {
+                queue_min_.pop_front();
+                curr_min_ = queue_min_.is_empty() ? x : queue_min_.front();
+            }
+            while (!queue_min_.is_empty() && queue_min_.back() > x) {
+                queue_min_.pop_back();
+            }
+            if (queue_min_.is_empty()) {
+                curr_min_ = x;
+            }
+            queue_min_.push_back(x);
+        }
     }
 
     //! Get moving average value.
@@ -104,6 +139,16 @@ public:
         } else {
             return (T)sqrt((n*movsum2_ - movsum_ * movsum_) / (n * n));
         }
+    }
+
+    T mov_max() const
+    {
+        return curr_max_;
+    }
+
+    T mov_min() const
+    {
+        return curr_min_;
     }
 
     //! Extend rolling window length.
@@ -137,6 +182,7 @@ public:
 private:
     Array<T> buffer_;
     Array<T> buffer2_;
+
     const size_t win_len_;
     size_t buffer_i_;
     T movsum_;
@@ -147,6 +193,87 @@ private:
 
     bool full_;
     bool first_;
+
+    class Queue {
+    public:
+        Queue(core::IArena& arena, size_t len)
+            : buff_(arena)
+            , buff_len_(len)
+            , begin_(0)
+            , end_(0)
+        {
+            if (!buff_.resize(len)) {
+                roc_panic("Queue: can't allocate storage for the buffer");
+            }
+        }
+
+        T& front()
+        {
+            if (is_empty()) {
+                roc_panic("Queue: front() called on empty buffer");
+            }
+            return buff_[begin_];
+        }
+
+        T& back()
+        {
+            if (is_empty()) {
+                roc_panic("Queue: back() called on empty buffer");
+            }
+            return buff_[(end_ - 1 + buff_len_) % buff_len_];
+        }
+
+        size_t len() const
+        {
+            return (end_ - begin_ + buff_len_) % buff_len_;
+        }
+
+        void push_front(const T& x)
+        {
+            begin_ = (begin_ - 1 + buff_len_) % buff_len_;
+            buff_[begin_] = x;
+            roc_panic_if_msg(end_ == begin_, "Queue: buffer overflow");
+        }
+
+        void pop_front()
+        {
+            if (is_empty()) {
+                roc_panic("Queue: pop_front() called on empty buffer");
+            }
+            begin_ = (begin_ + 1) % buff_len_;
+        }
+
+        void push_back(const T& x)
+        {
+            buff_[end_] = x;
+            end_ = (end_ + 1) % buff_len_;
+            roc_panic_if_msg(end_ == begin_, "Queue: buffer overflow");
+        }
+
+        void pop_back()
+        {
+            if (is_empty()) {
+                roc_panic("Queue: pop_back() called on empty buffer");
+            }
+            end_ = (end_ - 1 + buff_len_) % buff_len_;
+        }
+
+        bool is_empty()
+        {
+            return begin_ == end_;
+        }
+
+    private:
+        Array<T> buff_;
+        size_t buff_len_;
+        size_t begin_;
+        size_t end_;
+    };
+
+    Queue queue_max_;
+    T curr_max_;
+    Queue queue_min_;
+    T curr_min_;
 };
 
 } // namespace core

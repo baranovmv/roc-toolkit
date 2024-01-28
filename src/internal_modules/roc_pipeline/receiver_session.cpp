@@ -47,6 +47,8 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
     pkt_writer = source_queue_.get();
 
     source_meter_.reset(new (source_meter_) rtp::LinkMeter(encoding_map));
+    source_meter_.reset(new (source_meter_)
+                            rtp::LinkMeter(arena, encoding->sample_spec, 100));
     if (!source_meter_) {
         return;
     }
@@ -92,7 +94,8 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
             return;
         }
 
-        repair_meter_.reset(new (repair_meter_) rtp::LinkMeter(encoding_map));
+        repair_meter_.reset(new (repair_meter_)
+                                rtp::LinkMeter(arena, encoding->sample_spec, 100));
         if (!repair_meter_) {
             return;
         }
