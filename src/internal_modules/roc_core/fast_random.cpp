@@ -81,5 +81,7 @@ double fast_random_gaussian() {
     return r * std::cos(theta);
 }
 
+
+
 } // namespace core
 } // namespace roc
