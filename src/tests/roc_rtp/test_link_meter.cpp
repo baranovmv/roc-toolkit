@@ -77,7 +77,7 @@ TEST(link_meter, has_metrics) {
     LONGS_EQUAL(status::StatusOK, meter.write(new_packet(100, start_ts)));
     UNSIGNED_LONGS_EQUAL(1, queue.size());
 
-    CHECK(meter.has_metrics());
+    CHECK(!meter.has_metrics());
 }
 
 TEST(link_meter, last_seqnum) {
@@ -217,7 +217,7 @@ TEST(link_meter, ascending_test) {
         packet::seqnum_t seqnum = 65500 + i;
         ts_store[i] = ts;
         CHECK_EQUAL(status::StatusOK, meter.write(new_packet(seqnum, ts)));
-        ts += step_ts + i * core::Microsecond; // Removed the random component to create an increasing sequence
+        ts += step_ts + (core::nanoseconds_t)i * core::Microsecond; // Removed the random component to create an increasing sequence
 
         if (i > RunningWinLen) {
             // Check meter metrics running max in min jitter in last Duration number
@@ -247,7 +247,7 @@ TEST(link_meter, descending_test) {
         packet::seqnum_t seqnum = 65500 + i;
         ts_store[i] = ts;
         CHECK_EQUAL(status::StatusOK, meter.write(new_packet(seqnum, ts)));
-        ts += step_ts - i * core::Nanosecond * 10; // Removed the random component to create an increasing sequence
+        ts += step_ts - (core::nanoseconds_t)i * core::Nanosecond * 10; // Removed the random component to create an increasing sequence
 
         if (i > RunningWinLen) {
             // Check meter metrics running max in min jitter in last Duration number

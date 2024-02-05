@@ -189,11 +189,11 @@ void LinkMeter::update_losses_(const packet::Packet& packet) {
     roc_panic_if_msg (gap < 0, "RTPStats: negative gap detected %ld", gap);
 
     if (gap > 0) {
-        lost_ += gap;
-        fract_lost_counter_ += gap;
+        lost_ += (size_t)gap;
+        fract_lost_counter_ += (size_t)gap;
     }
     seqnum_prev_loss_ = packet.rtp()->seqnum;
-    metrics_.num_packets_covered += 1 + gap;
+    metrics_.num_packets_covered += 1 + (size_t)gap;
     metrics_.cum_loss = lost_;
     metrics_.fract_loss = (float)fract_lost_counter_ /
         (float)(metrics_.num_packets_covered);
