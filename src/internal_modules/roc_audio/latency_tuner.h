@@ -209,6 +209,8 @@ private:
     bool check_bounds_(packet::stream_timestamp_diff_t latency);
     void compute_scaling_(packet::stream_timestamp_diff_t latency);
     void report_();
+    void update_target_latency_(const LatencyMetrics& latency_metrics,
+                                 const packet::LinkMetrics& link_metrics);
 
     core::Optional<FreqEstimator> fe_;
 
@@ -247,6 +249,14 @@ private:
     const SampleSpec sample_spec_;
 
     bool valid_;
+
+    enum TargetLatencyState {
+        TL_NONE,
+        TL_START,
+        TL_INC_TIMEOUT,
+        TL_DEC_TIMEOUT
+    } target_latency_state_;
+    core::nanoseconds_t last_target_latency_update_;
 };
 
 //! Get string name of latency backend.

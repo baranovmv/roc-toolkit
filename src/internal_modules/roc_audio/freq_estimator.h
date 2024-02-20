@@ -44,11 +44,16 @@ struct FreqEstimatorConfig {
     //! to fe_decim_factor_max. Could be zero to disable the second decimation stage.
     size_t decimation_factor2;
 
+    //! Within this range we consider the FreqEstimator is stable.
+    //! stable_criteria > error / target;
+    double stable_criteria;
+
     FreqEstimatorConfig()
         : P(0)
         , I(0)
         , decimation_factor1(0)
-        , decimation_factor2(0) {
+        , decimation_factor2(0)
+        , stable_criteria(0.1) {
     }
 };
 
@@ -75,12 +80,18 @@ public:
     //! Compute new value of frequency coefficient.
     void update(packet::stream_timestamp_t current_latency);
 
+    //! Update target latency.
+    void update_target_latency(packet::stream_timestamp_t target_latency);
+
+    //! If FreqEstimator has stabilized.
+    bool stable() const;
+
 private:
     bool run_decimators_(packet::stream_timestamp_t current, double& filtered);
     double run_controller_(double current);
 
     const FreqEstimatorConfig config_;
-    const double target_; // Target latency.
+    double target_; // Target latency.
 
     double dec1_casc_buff_[fe_decim_len];
     size_t dec1_ind_;
@@ -92,6 +103,10 @@ private:
     double accum_;           // Integrator value.
 
     double coeff_; // Current frequency coefficient value.
+
+    bool stable_; // True if FreqEstimator has stabilized.
+    // Last time when FreqEstimator was out of range.
+    core::nanoseconds_t last_unstable_time_;
 };
 
 } // namespace audio

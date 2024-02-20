@@ -154,6 +154,7 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
                 packet_jitter_stats_.add(std::abs(d_enq_ts - d_capt_ts));
                 metrics_.max_jitter = packet_jitter_stats_.mov_max();
                 metrics_.min_jitter = packet_jitter_stats_.mov_min();
+                metrics_.mean_jitter = mean_jitter();
                 jitter_processed_++;
                 metrics_.jitter = sample_spec_.ns_2_samples_per_chan(mean_jitter());
             }

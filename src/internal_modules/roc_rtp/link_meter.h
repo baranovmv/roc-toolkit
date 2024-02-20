@@ -60,6 +60,9 @@ struct LinkMetrics {
     //! received and lost packets.
     size_t num_packets_covered;
 
+    //! Running mean of Jitter.
+    core::nanoseconds_t mean_jitter;
+
     //! Running max of Jitter.
     core::nanoseconds_t max_jitter;
 
@@ -71,7 +74,9 @@ struct LinkMetrics {
         , fract_loss(0)
         , cum_loss(0)
         , jitter(0)
-        , num_packets_covered(0) {
+        , num_packets_covered(0)
+        , max_jitter(0)
+        , min_jitter(0) {
     }
 };
 

@@ -166,7 +166,9 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample
     , max_latency_(0)
     , max_stalling_(0)
     , sample_spec_(sample_spec)
-    , valid_(false) {
+    , valid_(false)
+    , target_latency_state_(TL_START)
+    , last_target_latency_update_(0) {
     roc_log(LogDebug,
             "latency tuner: initializing:"
             " target_latency=%ld(%.3fms) min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)"
@@ -304,6 +306,7 @@ bool LatencyTuner::update_stream() {
         if (!has_niq_latency_) {
             return true;
         }
+        update_target_latency_ ()
         latency = niq_latency_;
         break;
 
@@ -333,6 +336,10 @@ bool LatencyTuner::update_stream() {
 
 void LatencyTuner::advance_stream(packet::stream_timestamp_t duration) {
     roc_panic_if(!is_valid());
+
+    if (last_target_latency_update_ == 0) {
+        last_target_latency_update_ = core::timestamp(core::ClockMonotonic);
+    }
 
     stream_pos_ += duration;
 
@@ -429,6 +436,92 @@ void LatencyTuner::report_() {
         (long)jitter_, sample_spec_.stream_timestamp_delta_2_ms(jitter_),
         (long)niq_stalling_, sample_spec_.stream_timestamp_delta_2_ms(niq_stalling_),
         (double)(fe_ && freq_coeff_ > 0 ? fe_->freq_coeff() : 0), (double)freq_coeff_);
+}
+
+void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
+                                 const packet::LinkMetrics& link_metrics) {
+    const core::nanoseconds_t tl = std::max(std::max(link_metrics.max_jitter,
+                                                    link_metrics.mean_jitter * 3),
+                                                    latency_metrics.fec_block_duration);
+    const core::nanoseconds_t  now = core::timestamp(core::ClockMonotonic);
+    core::nanoseconds_t cur_tl_ns = sample_spec_.stream_timestamp_delta_2_ns(target_latency_);
+
+    if (target_latency_state_ == TL_NONE) {
+        // If there is no active timeout, check if evaluated target latency is significantly smaller,
+        // than the latency in action so that we could decrease it.
+        if (tl < cur_tl_ns &&
+            (cur_tl_ns - tl) / (double )(cur_tl_ns) > 0.1 &&
+            fe_->stable()) {
+            const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)(cur_tl_ns * 0.9);
+            const packet::stream_timestamp_diff_t new_tl_ts =
+                sample_spec_.ns_2_stream_timestamp_delta(cur_tl_ns);
+            if (new_tl_ts < min_latency_) {
+                roc_log(LogDebug, "Latency monitor:"
+                                  " not decreasing target latency lower than limit %ld(%.3fms)",
+                        (long)min_latency_, sample_spec_.stream_timestamp_delta_2_ms(min_latency_));
+                return;
+            }
+
+            roc_log(LogInfo,
+                    "Latency monitor:"
+                    " decreasing target latency %ld(%.3fms)→%ld(%.3fms)",
+                    (long)target_latency_, (double)cur_tl_ns / core::Millisecond,
+                    (long)new_tl_ts, (double)new_tl_ns / core::Millisecond);
+
+            cur_tl_ns = new_tl_ns;
+            target_latency_ = new_tl_ts;
+            last_target_latency_update_ = now;
+            target_latency_state_ = TL_DEC_TIMEOUT;
+            fe_->update_target_latency(target_latency_);
+
+            return;
+        // If evaluated target latency is greater, than we must increase it.
+        } else if (tl > cur_tl_ns
+                   && (tl - cur_tl_ns) / (float)(cur_tl_ns) > 0.01 &&
+                   fe_->stable()) {
+            const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)(tl * 1.1);
+            const packet::stream_timestamp_diff_t new_tl_ts =
+                sample_spec_.ns_2_stream_timestamp_delta(cur_tl_ns);
+
+            if (new_tl_ts > max_latency_) {
+                roc_log(LogDebug, "Latency monitor:"
+                                  " not increasing target latency more than limit %ld(%.3fms)",
+                        (long)max_latency_, sample_spec_.stream_timestamp_delta_2_ms(max_latency_));
+                return;
+            }
+
+            roc_log(LogInfo,
+                    "Latency monitor:"
+                    " increasing target latency %ld(%.3fms)→%ld(%.3fms)",
+                    (long)target_latency_, (double)cur_tl_ns / core::Millisecond,
+                    (long)new_tl_ts, (double)new_tl_ns / core::Millisecond);
+
+
+            cur_tl_ns = (core::nanoseconds_t)(tl * 1.1);
+            target_latency_ = sample_spec_.ns_2_stream_timestamp_delta(cur_tl_ns);
+            last_target_latency_update_ = now;
+            target_latency_state_ = TL_INC_TIMEOUT;
+            fe_->update_target_latency(target_latency_);
+            return;
+        }
+
+    // Waiting the timeout since last decreasement.
+    } else if (target_latency_state_ == TL_DEC_TIMEOUT &&
+               now - last_target_latency_update_ > 15 * core::Second) {
+        target_latency_state_ = TL_NONE;
+    // Waiting the timeout since the startup.
+    } else if (target_latency_state_ == TL_START &&
+               (last_target_latency_update_ == 0 ||
+               (now - last_target_latency_update_ > 5 * core::Second))) {
+        target_latency_state_ = TL_NONE;
+    
+    // Waiting the timeout since the last increasement.
+    } else if (target_latency_state_ == TL_INC_TIMEOUT &&
+               now - last_target_latency_update_ > 5 * core::Second) {
+        target_latency_state_ = TL_NONE;
+    }
+
+    return;
 }
 
 const char* latency_tuner_backend_to_str(LatencyTunerBackend backend) {
