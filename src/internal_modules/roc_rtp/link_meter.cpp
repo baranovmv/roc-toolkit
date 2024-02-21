@@ -14,7 +14,7 @@ namespace roc {
 namespace rtp {
 
 LinkMeter::LinkMeter(core::IArena& arena,
-                    const EncodingMap& encoding_map
+                    const EncodingMap& encoding_map,
                      const audio::SampleSpec& sample_spec,
                      size_t run_win_len)
     : encoding_map_(encoding_map)
@@ -24,14 +24,11 @@ LinkMeter::LinkMeter(core::IArena& arena,
     , sample_spec_(sample_spec)
     , first_packet_jitter_(true)
     , first_packet_losses_(true)
+    , win_len_(run_win_len)
     , has_metrics_(false)
     , first_seqnum_(0)
     , last_seqnum_hi_(0)
     , last_seqnum_lo_(0)
-    , win_len_(run_win_len)
-    , seqnum_prev_loss_(0)
-    , lost_(0)
-    , fract_lost_counter_(0)
     , jitter_processed_(0)
     , prev_packet_enq_ts_(-1)
     , packet_jitter_stats_(arena, run_win_len) {
@@ -82,7 +79,7 @@ status::StatusCode LinkMeter::write(const packet::PacketPtr& packet) {
             encoding_ = encoding_map_.find_by_pt(packet->rtp()->payload_type);
         }
         if (encoding_) {
-            update_metrics_(*packet);
+            update_jitter_(*packet);
         }
     }
 
@@ -116,14 +113,6 @@ void LinkMeter::set_reader(packet::IReader& reader) {
     reader_ = &reader;
 }
 
-bool LinkMeter::has_metrics() const {
-    return has_metrics_;
-}
-
-LinkMetrics LinkMeter::metrics() const {
-    return metrics_;
-}
-
 void LinkMeter::update_jitter_(const packet::Packet& packet) {
     const packet::seqnum_t pkt_seqnum = packet.rtp()->seqnum;
 
@@ -154,9 +143,8 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
                 packet_jitter_stats_.add(std::abs(d_enq_ts - d_capt_ts));
                 metrics_.max_jitter = packet_jitter_stats_.mov_max();
                 metrics_.min_jitter = packet_jitter_stats_.mov_min();
-                metrics_.mean_jitter = mean_jitter();
                 jitter_processed_++;
-                metrics_.jitter = sample_spec_.ns_2_samples_per_chan(mean_jitter());
+                metrics_.jitter = mean_jitter();
             }
         }
 
@@ -171,33 +159,30 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 
     // TODO(gh-688):
     //  - fill total_packets
-    //  - fill lost_packets
     //  - fill jitter (use encoding_->sample_spec to convert to nanoseconds)
 
-    first_packet_ = false;
     has_metrics_ = true;
 }
 
 void LinkMeter::update_losses_(const packet::Packet& packet) {
 
     if (first_packet_losses_) {
-        first_packet_losses_ = false;
-        metrics_.num_packets_covered = 1;
         seqnum_prev_loss_ = packet.rtp()->seqnum;
+        seqnum_fract_beginning_ = seqnum_prev_loss_ + 1;
+        first_packet_losses_ = false;
         return;
     }
     const ssize_t gap = packet::seqnum_diff(packet.rtp()->seqnum, seqnum_prev_loss_ + 1);
-    roc_panic_if_msg (gap < 0, "RTPStats: negative gap detected %ld", gap);
 
     if (gap > 0) {
-        lost_ += (size_t)gap;
-        fract_lost_counter_ += (size_t)gap;
+        metrics_.lost_packets += gap;
+    } else if (gap < 0 && metrics_.lost_packets >= 1) {
+        metrics_.lost_packets -= 1;
     }
-    seqnum_prev_loss_ = packet.rtp()->seqnum;
-    metrics_.num_packets_covered += 1 + (size_t)gap;
-    metrics_.cum_loss = lost_;
-    metrics_.fract_loss = (float)fract_lost_counter_ /
-        (float)(metrics_.num_packets_covered);
+
+    if (gap >= 0) {
+        seqnum_prev_loss_ = packet.rtp()->seqnum + 1;
+    }
 }
 
 core::nanoseconds_t rtp::LinkMeter::mean_jitter() const {
@@ -208,9 +193,5 @@ core::nanoseconds_t rtp::LinkMeter::var_jitter() const {
     return packet_jitter_stats_.mov_var();
 }
 
-void LinkMeter::reset_metrics() {
-    fract_lost_counter_ = 0;
-    metrics_.num_packets_covered = 0;
-}
 } // namespace rtp
 } // namespace roc

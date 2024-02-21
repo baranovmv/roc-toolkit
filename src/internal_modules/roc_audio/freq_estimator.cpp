@@ -188,7 +188,7 @@ bool FreqEstimator::stable() const {
     return stable_;
 }
 
-const char* fe_profile_to_str(FreqEstimatorProfile profile) {
+static const char* fe_profile_to_str(FreqEstimatorProfile profile) {
     switch (profile) {
     case FreqEstimatorProfile_Responsive:
         return "responsive";

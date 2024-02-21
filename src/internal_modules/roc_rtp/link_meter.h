@@ -27,59 +27,6 @@
 namespace roc {
 namespace rtp {
 
-//! RTP link meter.
-struct LinkMetrics {
-    //! Extended highest RTP seqnum received.
-    //! The low 16 bits contain the highest sequence number received in an RTP data
-    //! packet, and the rest bits extend that sequence number with the corresponding
-    //! count of seqnum cycles.
-    uint32_t ext_last_seqnum;
-
-    //! Fraction of lost packets from 0 to 1.
-    //! The fraction of RTP data packets lost since the previous report was sent.
-    //! Defined to be the number of packets lost divided by the number of packets
-    //! expected. If the loss is negative due to duplicates, set to zero.
-    float fract_loss;
-
-    //! Cumulative count of lost packets.
-    //! The total number of RTP data packets that have been lost since the beginning
-    //! of reception. Defined to be the number of packets expected minus the number of
-    //! packets actually received, where the number of packets received includes any
-    //! which are late or duplicates. Packets that arrive late are not counted as lost,
-    //! and the loss may be negative if there are duplicates.
-    int32_t cum_loss;
-
-    //! Estimated interarrival jitter, in timestamp units.
-    //! An estimate of the statistical variance of the RTP data packet interarrival
-    //! time, measured in timestamp units.
-    packet::stream_timestamp_t jitter;
-
-
-    //! Number of packets covered by this report.
-    //! This field start with 0 after each call LinkMeter::reset_metrics() and it contains
-    //! received and lost packets.
-    size_t num_packets_covered;
-
-    //! Running mean of Jitter.
-    core::nanoseconds_t mean_jitter;
-
-    //! Running max of Jitter.
-    core::nanoseconds_t max_jitter;
-
-    //! Running min of Jitter.
-    core::nanoseconds_t min_jitter;
-
-    LinkMetrics()
-        : ext_last_seqnum(0)
-        , fract_loss(0)
-        , cum_loss(0)
-        , jitter(0)
-        , num_packets_covered(0)
-        , max_jitter(0)
-        , min_jitter(0) {
-    }
-};
-
 //! Link meter.
 //!
 //! Computes various link metrics based on sequence of RTP packets.
@@ -102,7 +49,7 @@ class LinkMeter : public packet::ILinkMeter,
 public:
     //! Initialize.
     explicit LinkMeter(core::IArena& arena,
-                    const EncodingMap& encoding_map
+                    const EncodingMap& encoding_map,
                      const audio::SampleSpec& sample_spec,
                      size_t run_win_len);
 
@@ -145,13 +92,7 @@ public:
     //!  Should be called before first read() call.
     void set_reader(packet::IReader& reader);
 
-    //! Check if metrics are already gathered and can be reported.
-    bool has_metrics() const;
-
-    void reset_metrics();
-
     //! Get metrics.
-    LinkMetrics metrics() const;
     core::nanoseconds_t mean_jitter() const;
     core::nanoseconds_t var_jitter() const;
 
@@ -169,8 +110,8 @@ private:
 
     bool first_packet_jitter_;
     bool first_packet_losses_;
-    bool has_metrics_;
     const size_t win_len_;
+    bool has_metrics_;
 
     packet::LinkMetrics metrics_;
 
@@ -179,7 +120,8 @@ private:
     uint16_t last_seqnum_lo_;
 
     size_t lost_;
-    size_t fract_lost_counter_;
+    packet::seqnum_t seqnum_prev_loss_;
+    packet::seqnum_t seqnum_fract_beginning_;
     size_t jitter_processed_;
     core::nanoseconds_t prev_packet_enq_ts_;
     packet::stream_timestamp_t prev_stream_timestamp;

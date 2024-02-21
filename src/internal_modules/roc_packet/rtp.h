@@ -75,10 +75,6 @@ struct RTP {
     //! Packet payload type ("pt").
     unsigned int payload_type;
 
-    //! Internal flag, valid for receiver side only.
-    //! Signals if this packet was recovered by FEC.
-    bool fec_recovered;
-
     //! Packet header.
     core::Slice<uint8_t> header;
 

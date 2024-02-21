@@ -112,13 +112,9 @@ struct LatencyMonitorMetrics {
     //! (when it is captured) and leaved received pipeline (when it is played).
     core::nanoseconds_t e2e_latency;
 
-    //! Estimated FEC block duration.
-    core::nanoseconds_t fec_block_duration;
-
     LatencyMonitorMetrics()
         : niq_latency(0)
-        , e2e_latency(0)
-        , fec_block_duration(0) {
+        , e2e_latency(0) {
     }
 };
 

@@ -151,10 +151,14 @@ struct LatencyMetrics {
     //! on receiver.
     core::nanoseconds_t e2e_latency;
 
+    //! Estimated FEC block duration.
+    core::nanoseconds_t fec_block_duration;
+
     LatencyMetrics()
         : niq_latency(0)
         , niq_stalling(0)
-        , e2e_latency(0) {
+        , e2e_latency(0)
+        , fec_block_duration(0) {
     }
 };
 
@@ -238,8 +242,9 @@ private:
     bool has_e2e_latency_;
     packet::stream_timestamp_diff_t e2e_latency_;
 
-    bool has_jitter_;
-    packet::stream_timestamp_diff_t jitter_;
+    bool has_metrics_;
+    LatencyMetrics latency_metrics_;
+    packet::LinkMetrics link_metrics_;
 
     packet::stream_timestamp_diff_t target_latency_;
     packet::stream_timestamp_diff_t min_latency_;
