@@ -114,6 +114,11 @@ void LinkMeter::set_reader(packet::IReader& reader) {
 }
 
 void LinkMeter::update_jitter_(const packet::Packet& packet) {
+    // Do not calculate jitter on recovered packets.
+    if (packet.has_flags(packet::Packet::FlagRestored)) {
+        return;
+    }
+
     const packet::seqnum_t pkt_seqnum = packet.rtp()->seqnum;
 
     // If packet seqnum is before first seqnum, and there was no wrap yet,
@@ -157,14 +162,16 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
     metrics_.ext_first_seqnum = first_seqnum_;
     metrics_.ext_last_seqnum = last_seqnum_hi_ + last_seqnum_lo_;
 
-    // TODO(gh-688):
-    //  - fill total_packets
-    //  - fill jitter (use encoding_->sample_spec to convert to nanoseconds)
-
     has_metrics_ = true;
 }
 
 void LinkMeter::update_losses_(const packet::Packet& packet) {
+    // Do not calculate losses on recovered packets.
+     if (packet.has_flags(packet::Packet::FlagRestored)) {
+        return;
+    }
+
+    metrics_.total_packets++;
 
     if (first_packet_losses_) {
         seqnum_prev_loss_ = packet.rtp()->seqnum;
