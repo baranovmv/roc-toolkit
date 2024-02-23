@@ -10,6 +10,7 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_core/time.h"
+#include <fstream>
 
 namespace roc {
 namespace audio {
@@ -272,6 +273,8 @@ bool LatencyTuner::is_valid() const {
 
 void LatencyTuner::write_metrics(const LatencyMetrics& latency_metrics,
                                  const packet::LinkMetrics& link_metrics) {
+    static std::ofstream fout("/tmp/tuner.log", std::ios::out);
+
     roc_panic_if(!is_valid());
 
     if (latency_metrics.niq_latency > 0 || latency_metrics.niq_stalling > 0
@@ -290,6 +293,11 @@ void LatencyTuner::write_metrics(const LatencyMetrics& latency_metrics,
     }
 
     update_target_latency_(latency_metrics, link_metrics);
+
+    fout << core::timestamp(core::ClockMonotonic)
+        << ", " << niq_latency_
+        << ", " << target_latency_
+        << std::endl;
 
     latency_metrics_ = latency_metrics;
     link_metrics_ = link_metrics;
@@ -427,20 +435,36 @@ void LatencyTuner::report_() {
         LogDebug,
         "latency tuner:"
         " e2e_latency=%ld(%.3fms) niq_latency=%ld(%.3fms) target_latency=%ld(%.3fms)"
-        " jitter=%ld(%.3fms) stale=%ld(%.3fms)"
+        " jitter=%.3fms stale=%ld(%.3fms)"
         " fe=%.6f eff_fe=%.6f",
         (long)e2e_latency_, sample_spec_.stream_timestamp_delta_2_ms(e2e_latency_),
         (long)niq_latency_, sample_spec_.stream_timestamp_delta_2_ms(niq_latency_),
         (long)target_latency_, sample_spec_.stream_timestamp_delta_2_ms(target_latency_),
-        (long)link_metrics_.jitter,
-        sample_spec_.stream_timestamp_delta_2_ms(link_metrics_.jitter),
+        (double )link_metrics_.jitter / core::Millisecond,
         (long)niq_stalling_, sample_spec_.stream_timestamp_delta_2_ms(niq_stalling_),
         (double)(fe_ && freq_coeff_ > 0 ? fe_->freq_coeff() : 0), (double)freq_coeff_);
+
+
+    if (has_metrics_) {
+        roc_log(LogDebug,
+                "Latency monitor Link Metrics:"
+                " cum_loss=%ld jitter=%.1fms"
+                " running_jitter(Max/Min)=%.1f/%.1fms"
+                " total_packets=%ld",
+                link_metrics_.lost_packets,
+                (double)link_metrics_.jitter/core::Millisecond,
+                (double)link_metrics_.max_jitter / core::Millisecond,
+                (double)link_metrics_.min_jitter / core::Millisecond,
+                link_metrics_.total_packets);
+        roc_log(LogDebug, "Latency monitor: fec block duration=%.1fms",
+                (double)latency_metrics_.fec_block_duration / core::Millisecond);
+    }
 }
 
 void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
                                  const packet::LinkMetrics& link_metrics) {
-    const core::nanoseconds_t tl = std::max(std::max(link_metrics.max_jitter,
+    const core::nanoseconds_t tl =
+        std::max(std::max( (core::nanoseconds_t )(link_metrics.max_jitter * 1.15),
                                                     link_metrics.jitter * 3),
                                                     latency_metrics.fec_block_duration);
     const core::nanoseconds_t  now = core::timestamp(core::ClockMonotonic);
@@ -450,9 +474,9 @@ void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
         // If there is no active timeout, check if evaluated target latency is significantly smaller,
         // than the latency in action so that we could decrease it.
         if (tl < cur_tl_ns &&
-            (cur_tl_ns - tl) / (double )(cur_tl_ns) > 0.1 &&
+            (cur_tl_ns - tl) / (double )(cur_tl_ns) > 0.35 &&
             fe_->stable()) {
-            const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)(cur_tl_ns * 0.9);
+            const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)(cur_tl_ns * 0.7);
             const packet::stream_timestamp_diff_t new_tl_ts =
                 sample_spec_.ns_2_stream_timestamp_delta(new_tl_ns);
             if (new_tl_ts < min_latency_) {
@@ -464,7 +488,7 @@ void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
 
             roc_log(LogInfo,
                     "Latency monitor:"
-                    " decreasing target latency %ld(%.3fms)→%ld(%.3fms)",
+                    " decreasing target latency %ld(%.3fms) → %ld(%.3fms)",
                     (long)target_latency_, (double)cur_tl_ns / core::Millisecond,
                     (long)new_tl_ts, (double)new_tl_ns / core::Millisecond);
 
@@ -492,7 +516,7 @@ void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
 
             roc_log(LogInfo,
                     "Latency monitor:"
-                    " increasing target latency %ld(%.3fms)→%ld(%.3fms)",
+                    " increasing target latency %ld(%.3fms) → %ld(%.3fms)",
                     (long)target_latency_, (double)cur_tl_ns / core::Millisecond,
                     (long)new_tl_ts, (double)new_tl_ns / core::Millisecond);
 

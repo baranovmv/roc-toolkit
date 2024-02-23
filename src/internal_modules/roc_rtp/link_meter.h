@@ -122,10 +122,8 @@ private:
     size_t lost_;
     packet::seqnum_t seqnum_prev_loss_;
     packet::seqnum_t seqnum_fract_beginning_;
-    size_t jitter_processed_;
     core::nanoseconds_t prev_packet_enq_ts_;
-    packet::stream_timestamp_t prev_stream_timestamp;
-    packet::stream_timestamp_t prev_pack_duration_;
+    packet::stream_timestamp_t prev_stream_timestamp_;
     core::MovStats<core::nanoseconds_t> packet_jitter_stats_;
 };
 

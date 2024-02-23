@@ -9,6 +9,7 @@
 #include "roc_core/panic.h"
 #include "roc_packet/units.h"
 #include "link_meter.h"
+#include <fstream>
 
 namespace roc {
 namespace rtp {
@@ -29,8 +30,8 @@ LinkMeter::LinkMeter(core::IArena& arena,
     , first_seqnum_(0)
     , last_seqnum_hi_(0)
     , last_seqnum_lo_(0)
-    , jitter_processed_(0)
     , prev_packet_enq_ts_(-1)
+    , prev_stream_timestamp_(0)
     , packet_jitter_stats_(arena, run_win_len) {
 }
 
@@ -114,6 +115,8 @@ void LinkMeter::set_reader(packet::IReader& reader) {
 }
 
 void LinkMeter::update_jitter_(const packet::Packet& packet) {
+    static std::ofstream fout("/tmp/jitt.log", std::ios::out);
+
     // Do not calculate jitter on recovered packets.
     if (packet.has_flags(packet::Packet::FlagRestored)) {
         return;
@@ -131,33 +134,40 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 
     // If packet seqnum is after last seqnum, update last seqnum, and
     // also counts possible wraps.
-    if (first_packet_jitter_ 
-        || packet::seqnum_diff(pkt_seqnum, last_seqnum_lo_) > 0) {
+    if (packet::seqnum_diff(pkt_seqnum, last_seqnum_lo_) > 0) {
         if (pkt_seqnum < last_seqnum_lo_) {
             last_seqnum_hi_ += (uint16_t)-1;
         }
-
-        if (!first_packet_jitter_) {
-            const size_t gap =  (size_t)abs(
-                packet::seqnum_diff(packet.rtp()->seqnum, last_seqnum_lo_ + 1));
-            // Compute jitter only on consequential packets.
-            if (gap == 0 && prev_pack_duration_ > 0){
-                const core::nanoseconds_t  d_enq_ts = packet.udp()->enqueue_ts -
-                                                        prev_packet_enq_ts_;
-                const core::nanoseconds_t d_capt_ts = sample_spec_.samples_per_chan_2_ns(prev_pack_duration_);
-                packet_jitter_stats_.add(std::abs(d_enq_ts - d_capt_ts));
-                metrics_.max_jitter = packet_jitter_stats_.mov_max();
-                metrics_.min_jitter = packet_jitter_stats_.mov_min();
-                jitter_processed_++;
-                metrics_.jitter = mean_jitter();
-            }
-        }
-
-        prev_packet_enq_ts_ = packet.udp()->enqueue_ts;
-        prev_pack_duration_ = packet.rtp()->duration;
-        last_seqnum_lo_ = pkt_seqnum;
-        prev_stream_timestamp = packet.rtp()->stream_timestamp;
     }
+
+    if (!first_packet_jitter_) {
+        // Compute jitter only on consequential packets.
+        const core::nanoseconds_t  d_enq_ns = packet.udp()->enqueue_ts -
+                                                prev_packet_enq_ts_;
+        const packet::stream_timestamp_diff_t d_s_ts =
+            packet::stream_timestamp_diff(packet.rtp()->stream_timestamp,
+                                          prev_stream_timestamp_);
+        const core::nanoseconds_t d_s_ns =
+            sample_spec_.stream_timestamp_delta_2_ns(d_s_ts);
+
+        packet_jitter_stats_.add(std::abs(d_enq_ns - d_s_ns));
+        metrics_.max_jitter = (core::nanoseconds_t)packet_jitter_stats_.mov_max();
+        metrics_.min_jitter = (core::nanoseconds_t)packet_jitter_stats_.mov_min();
+        metrics_.jitter = mean_jitter();
+
+        fout << packet.rtp()->stream_timestamp
+             << ", " << packet.udp()->enqueue_ts
+             << ", " << (double)std::abs(d_enq_ns - d_s_ns) / core::Millisecond
+             << ", " << packet_jitter_stats_.mov_max()
+             << ", " << packet_jitter_stats_.mov_min()
+             << std::endl;
+    } else {
+        first_packet_jitter_ = false;
+    }
+
+    prev_packet_enq_ts_ = packet.udp()->enqueue_ts;
+    prev_stream_timestamp_ = packet.rtp()->stream_timestamp;
+    last_seqnum_lo_ = pkt_seqnum;
 
     metrics_.ext_first_seqnum = first_seqnum_;
     metrics_.ext_last_seqnum = last_seqnum_hi_ + last_seqnum_lo_;
@@ -166,6 +176,8 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 }
 
 void LinkMeter::update_losses_(const packet::Packet& packet) {
+    static std::ofstream fout("/tmp/loss.log", std::ios::out);
+
     // Do not calculate losses on recovered packets.
      if (packet.has_flags(packet::Packet::FlagRestored)) {
         return;
@@ -181,6 +193,8 @@ void LinkMeter::update_losses_(const packet::Packet& packet) {
     }
     const ssize_t gap = packet::seqnum_diff(packet.rtp()->seqnum, seqnum_prev_loss_ + 1);
 
+    fout << packet.rtp()->seqnum << ", " << gap << std::endl;
+
     if (gap > 0) {
         metrics_.lost_packets += gap;
     } else if (gap < 0 && metrics_.lost_packets >= 1) {
@@ -193,11 +207,11 @@ void LinkMeter::update_losses_(const packet::Packet& packet) {
 }
 
 core::nanoseconds_t rtp::LinkMeter::mean_jitter() const {
-    return packet_jitter_stats_.mov_avg();
+    return (core::nanoseconds_t)packet_jitter_stats_.mov_avg();
 }
 
 core::nanoseconds_t rtp::LinkMeter::var_jitter() const {
-    return packet_jitter_stats_.mov_var();
+    return (core::nanoseconds_t)packet_jitter_stats_.mov_var();
 }
 
 } // namespace rtp
