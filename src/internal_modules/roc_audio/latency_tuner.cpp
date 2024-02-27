@@ -110,6 +110,10 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
 
                 min_latency = target_latency - latency_tolerance;
                 max_latency = target_latency + latency_tolerance;
+
+                if (upper_threshold_coef == 0.f) {
+                    upper_threshold_coef = (float)max_latency / (float)target_latency;
+                }
             } else {
                 // Can't deduce min_latency & max_latency without target_latency.
                 min_latency = -1;
@@ -168,10 +172,14 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample
     , sample_spec_(sample_spec)
     , valid_(false)
     , target_latency_state_(TL_START)
-    , last_target_latency_update_(0) {
+    , last_target_latency_update_(0)
+    , lat_update_upper_thrsh_(config.upper_threshold_coef)
+    , lat_update_dec_step_(upper_coef_to_step_lat_update_(config.upper_threshold_coef))
+    , lat_update_inc_step_(lower_thrs_to_step_lat_update_(config.upper_threshold_coef)) {
     roc_log(LogDebug,
             "latency tuner: initializing:"
             " target_latency=%ld(%.3fms) min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)"
+            " latency_upper_limit_coef=%f"
             " stale_tolerance=%ld(%.3fms)"
             " scaling_interval=%ld(%.3fms) scaling_tolerance=%f"
             " backend=%s profile=%s",
@@ -181,6 +189,7 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample
             (double)config.min_latency / core::Millisecond,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
             (double)config.max_latency / core::Millisecond,
+            (double)config.upper_threshold_coef,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.stale_tolerance),
             (double)config.stale_tolerance / core::Millisecond,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.scaling_interval),
@@ -226,6 +235,25 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample
                     (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
                     (double)config.max_latency / core::Millisecond);
                 return;
+            } else if ((float)target_latency_ * lat_update_upper_thrsh_
+                       > (float)max_latency_
+                       && enable_tuning_) {
+                roc_log(
+                    LogError,
+                    "latency tuner: invalid config: upper threshold coefficient is"
+                    " out of bounds: "
+                    " target_latency * %f = %ld(%.3fms)"
+                    " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)",
+                    (double)lat_update_upper_thrsh_,
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(
+                        (packet::stream_source_t)(target_latency_
+                                                  * lat_update_upper_thrsh_)),
+                    (double)(target_latency_ * lat_update_upper_thrsh_)
+                        / core::Millisecond,
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
+                    (double)config.min_latency / core::Millisecond,
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
+                    (double)config.max_latency / core::Millisecond);
             }
         }
 
@@ -251,6 +279,13 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample
                     " scaling_tolerance=%f",
                     (double)config.scaling_tolerance);
                 return;
+            }
+
+            if (config.upper_threshold_coef < 0) {
+                roc_log(
+                    LogError,
+                    "latency tuner: invalid config: upper threshold coef is negative:"
+                    " upper_threshold_coef=%f", (double)config.upper_threshold_coef);
             }
 
             fe_.reset(new (fe_)
@@ -292,7 +327,8 @@ void LatencyTuner::write_metrics(const LatencyMetrics& latency_metrics,
         has_e2e_latency_ = true;
     }
 
-    update_target_latency_(latency_metrics, link_metrics);
+    update_target_latency_(link_metrics.max_jitter, link_metrics.jitter,
+                           latency_metrics.fec_block_duration);
 
     fout << core::timestamp(core::ClockMonotonic)
         << ", " << niq_latency_
@@ -459,28 +495,54 @@ void LatencyTuner::report_() {
         roc_log(LogDebug, "Latency monitor: fec block duration=%.1fms",
                 (double)latency_metrics_.fec_block_duration / core::Millisecond);
     }
+
+    if (sample_spec_.ns_2_stream_timestamp_delta(latency_metrics_.fec_block_duration) >=
+        max_latency_) {
+        roc_log(LogInfo,
+                "Latency tuner: FEC block %.1fms is longer than the max "
+                "limit for latency %d(%.1fms)",
+                (double)latency_metrics_.fec_block_duration / core::Millisecond,
+                max_latency_, (double)max_latency_ / core::Millisecond);
+    }
 }
 
-void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
-                                 const packet::LinkMetrics& link_metrics) {
-    const core::nanoseconds_t tl =
-        std::max(std::max( (core::nanoseconds_t )(link_metrics.max_jitter * 1.15),
-                                                    link_metrics.jitter * 3),
-                                                    latency_metrics.fec_block_duration);
+// Decides if the latency should be adjusted and orders fe_ to do so if needed.
+//
+// 1. Decides to decrease latency if current value is greater than upper threshold,
+//    The target latency is supposed to change smoothely, so we just cut the current
+//    latency value by some percentage.
+//
+// 2. Decides to increase latency if it is lesser than lower threshold (which
+//    could be close or equal to target latency itself).
+//    This could/should be done effectively as it could possibly mean that the user
+//    is already perceives some losses.
+//
+//    NB: After the increasement the new latency target value must not be greater than
+//        upper threshold in any circumstances.
+//
+//
+void LatencyTuner::update_target_latency_(const core::nanoseconds_t max_jitter_ns,
+                                          const core::nanoseconds_t mean_jitter_ns,
+                                          const core::nanoseconds_t fec_block_ns) {
+    const core::nanoseconds_t estimate =
+        std::max(std::max( (core::nanoseconds_t )(max_jitter_ns * 1.15),
+                                                    mean_jitter_ns * 3),
+                                                    fec_block_ns);
     const core::nanoseconds_t  now = core::timestamp(core::ClockMonotonic);
     core::nanoseconds_t cur_tl_ns = sample_spec_.stream_timestamp_delta_2_ns(target_latency_);
 
     if (target_latency_state_ == TL_NONE) {
         // If there is no active timeout, check if evaluated target latency is significantly smaller,
         // than the latency in action so that we could decrease it.
-        if (tl < cur_tl_ns &&
-            (cur_tl_ns - tl) / (double )(cur_tl_ns) > 0.35 &&
+        if (estimate < cur_tl_ns &&
+            estimate * lat_update_upper_thrsh_ < cur_tl_ns &&
             fe_->stable()) {
-            const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)(cur_tl_ns * 0.7);
+            const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)
+                (cur_tl_ns * lat_update_dec_step_);
             const packet::stream_timestamp_diff_t new_tl_ts =
                 sample_spec_.ns_2_stream_timestamp_delta(new_tl_ns);
             if (new_tl_ts < min_latency_) {
-                roc_log(LogDebug, "Latency monitor:"
+                roc_log(LogDebug, "Latency tuner:"
                                   " not decreasing target latency lower than limit %ld(%.3fms)",
                         (long)min_latency_, sample_spec_.stream_timestamp_delta_2_ms(min_latency_));
                 return;
@@ -488,9 +550,18 @@ void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
 
             roc_log(LogInfo,
                     "Latency monitor:"
-                    " decreasing target latency %ld(%.3fms) → %ld(%.3fms)",
+                    " decreasing target latency %ld(%.3fms) → %ld(%.3fms)" ,
                     (long)target_latency_, (double)cur_tl_ns / core::Millisecond,
-                    (long)new_tl_ts, (double)new_tl_ns / core::Millisecond);
+                    (long)new_tl_ts, (double)new_tl_ns / core::Millisecond
+                    );
+            roc_log(LogDebug,
+                    "Latency monitor:"
+                    "\testimate %.3fms * %.3f = %.3fms,\tnew tl  %.3fms * %f = %.3fms",
+                    (double)estimate / core::Millisecond, (double)lat_update_upper_thrsh_,
+                    (double)estimate * (double)lat_update_upper_thrsh_ / core::Millisecond,
+                    (double)cur_tl_ns / core::Millisecond, (double)lat_update_dec_step_,
+                    (double)(new_tl_ns / core::Millisecond)
+                    );
 
             cur_tl_ns = new_tl_ns;
             target_latency_ = new_tl_ts;
@@ -500,29 +571,30 @@ void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
 
             return;
         // If evaluated target latency is greater, than we must increase it.
-        } else if (tl > cur_tl_ns
-                   && (tl - cur_tl_ns) / (double)(cur_tl_ns) > 0.01 &&
+        } else if (estimate > cur_tl_ns &&
                    fe_->stable()) {
-            const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)(tl * 1.1);
+            const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)
+                (estimate * lat_update_inc_step_);
             const packet::stream_timestamp_diff_t new_tl_ts =
-                sample_spec_.ns_2_stream_timestamp_delta(cur_tl_ns);
+                sample_spec_.ns_2_stream_timestamp_delta(new_tl_ns);
 
             if (new_tl_ts > max_latency_) {
-                roc_log(LogDebug, "Latency monitor:"
-                                  " not increasing target latency more than limit %ld(%.3fms)",
+                roc_log(LogDebug, "Latency tuner:"
+                                  " estimated latency %ld(%.3fms) is greater "
+                                  "than the limit  %ld(%.3fms), doing nothing",
+                        (long)new_tl_ts, (double)new_tl_ns / core::Millisecond,
                         (long)max_latency_, sample_spec_.stream_timestamp_delta_2_ms(max_latency_));
                 return;
             }
 
             roc_log(LogInfo,
-                    "Latency monitor:"
+                    "Latency tuner:"
                     " increasing target latency %ld(%.3fms) → %ld(%.3fms)",
                     (long)target_latency_, (double)cur_tl_ns / core::Millisecond,
                     (long)new_tl_ts, (double)new_tl_ns / core::Millisecond);
 
 
-            cur_tl_ns = (core::nanoseconds_t)(tl * 1.1);
-            target_latency_ = sample_spec_.ns_2_stream_timestamp_delta(cur_tl_ns);
+            target_latency_ = new_tl_ts;
             last_target_latency_update_ = now;
             target_latency_state_ = TL_INC_TIMEOUT;
             fe_->update_target_latency((packet::stream_timestamp_t)target_latency_);
@@ -544,6 +616,20 @@ void LatencyTuner::update_target_latency_(const LatencyMetrics& latency_metrics,
                now - last_target_latency_update_ > 5 * core::Second) {
         target_latency_state_ = TL_NONE;
     }
+}
+
+// Calculates latency decreasment step value such that
+// if current latency equals exactly upper threshold value,
+// after the decreasment it will get in the middle between threshold and estimated
+// value.
+float LatencyTuner::upper_coef_to_step_lat_update_(const float x) {
+    return ((x + 1.f) / (x * 2.f));
+}
+
+// Calculates latency increasment step value based on
+// upper_threshold_coef.
+float LatencyTuner::lower_thrs_to_step_lat_update_(const float x) {
+    return (x + 1.f) / 2.f;
 }
 
 const char* latency_tuner_backend_to_str(LatencyTunerBackend backend) {

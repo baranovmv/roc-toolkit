@@ -120,6 +120,10 @@ struct LatencyConfig {
     //!  Negative value is an error.
     float scaling_tolerance;
 
+    //! Latency tuner decides to adjust target latency if
+    //! the current value >= estimated optimal latency * upper_threshold_coef.
+    float upper_threshold_coef;
+
     //! Initialize.
     LatencyConfig()
         : tuner_backend(LatencyTunerBackend_Default)
@@ -129,7 +133,8 @@ struct LatencyConfig {
         , max_latency(0)
         , stale_tolerance(0)
         , scaling_interval(0)
-        , scaling_tolerance(0) {
+        , scaling_tolerance(0)
+        , upper_threshold_coef(0) {
     }
 
     //! Automatically fill missing settings.
@@ -213,8 +218,10 @@ private:
     bool check_bounds_(packet::stream_timestamp_diff_t latency);
     void compute_scaling_(packet::stream_timestamp_diff_t latency);
     void report_();
-    void update_target_latency_(const LatencyMetrics& latency_metrics,
-                                 const packet::LinkMetrics& link_metrics);
+    // Decides if the latency should be adjusted and orders fe_ to do so if needed.
+    void update_target_latency_(core::nanoseconds_t max_jitter_ns,
+                                core::nanoseconds_t mean_jitter_ns,
+                                core::nanoseconds_t fec_block_ns);
 
     core::Optional<FreqEstimator> fe_;
 
@@ -262,6 +269,11 @@ private:
         TL_DEC_TIMEOUT
     } target_latency_state_;
     core::nanoseconds_t last_target_latency_update_;
+    const float lat_update_upper_thrsh_;
+    float upper_coef_to_step_lat_update_(float upper_threshold_coef);
+    float lower_thrs_to_step_lat_update_(float upper_threshold_coef);
+    const float lat_update_dec_step_;
+    const float lat_update_inc_step_;
 };
 
 //! Get string name of latency backend.
