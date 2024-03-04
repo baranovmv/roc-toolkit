@@ -12,6 +12,7 @@
 #ifndef ROC_RTP_LINK_METER_H_
 #define ROC_RTP_LINK_METER_H_
 
+#include "roc_audio/latency_monitor.h"
 #include "roc_audio/sample_spec.h"
 #include "roc_core/iarena.h"
 #include "roc_core/mov_stats.h"
@@ -51,7 +52,7 @@ public:
     explicit LinkMeter(core::IArena& arena,
                     const EncodingMap& encoding_map,
                      const audio::SampleSpec& sample_spec,
-                     size_t run_win_len);
+                       audio::LatencyConfig latency_config);
 
     //! Check if metrics are already gathered and can be reported.
     virtual bool has_metrics() const;
@@ -96,6 +97,8 @@ public:
     core::nanoseconds_t mean_jitter() const;
     core::nanoseconds_t var_jitter() const;
 
+    size_t running_window_len() const;
+
 private:
     void update_jitter_(const packet::Packet& packet);
     void update_losses_(const packet::Packet& packet);
@@ -121,7 +124,6 @@ private:
 
     size_t lost_;
     packet::seqnum_t seqnum_prev_loss_;
-    packet::seqnum_t seqnum_fract_beginning_;
     core::nanoseconds_t prev_packet_enq_ts_;
     packet::stream_timestamp_t prev_stream_timestamp_;
     core::MovStats<core::nanoseconds_t> packet_jitter_stats_;

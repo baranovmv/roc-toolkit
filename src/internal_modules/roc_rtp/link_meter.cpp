@@ -17,7 +17,7 @@ namespace rtp {
 LinkMeter::LinkMeter(core::IArena& arena,
                     const EncodingMap& encoding_map,
                      const audio::SampleSpec& sample_spec,
-                     size_t run_win_len)
+                     audio::LatencyConfig latency_config)
     : encoding_map_(encoding_map)
     , encoding_(NULL)
     , writer_(NULL)
@@ -25,14 +25,15 @@ LinkMeter::LinkMeter(core::IArena& arena,
     , sample_spec_(sample_spec)
     , first_packet_jitter_(true)
     , first_packet_losses_(true)
-    , win_len_(run_win_len)
+    , win_len_(latency_config.tuner_profile == audio::LatencyTunerProfile_Responsive ?
+               5000 : 15000)
     , has_metrics_(false)
     , first_seqnum_(0)
     , last_seqnum_hi_(0)
     , last_seqnum_lo_(0)
     , prev_packet_enq_ts_(-1)
     , prev_stream_timestamp_(0)
-    , packet_jitter_stats_(arena, run_win_len) {
+    , packet_jitter_stats_(arena, win_len_) {
 }
 
 bool LinkMeter::has_metrics() const {
@@ -132,12 +133,17 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
         first_seqnum_ = pkt_seqnum;
     }
 
+    if (first_packet_jitter_) {
+        last_seqnum_hi_ = 0;
+        last_seqnum_lo_ = pkt_seqnum;
+
     // If packet seqnum is after last seqnum, update last seqnum, and
     // also counts possible wraps.
-    if (packet::seqnum_diff(pkt_seqnum, last_seqnum_lo_) > 0) {
+    } else if (packet::seqnum_diff(pkt_seqnum, last_seqnum_lo_) > 0) {
         if (pkt_seqnum < last_seqnum_lo_) {
-            last_seqnum_hi_ += (uint16_t)-1;
+            last_seqnum_hi_ += 1 << 16;
         }
+        last_seqnum_lo_ = pkt_seqnum;
     }
 
     if (!first_packet_jitter_) {
@@ -167,10 +173,10 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 
     prev_packet_enq_ts_ = packet.udp()->enqueue_ts;
     prev_stream_timestamp_ = packet.rtp()->stream_timestamp;
-    last_seqnum_lo_ = pkt_seqnum;
 
     metrics_.ext_first_seqnum = first_seqnum_;
     metrics_.ext_last_seqnum = last_seqnum_hi_ + last_seqnum_lo_;
+    metrics_.total_packets = metrics_.ext_last_seqnum - first_seqnum_ + 1;
 
     has_metrics_ = true;
 }
@@ -183,11 +189,8 @@ void LinkMeter::update_losses_(const packet::Packet& packet) {
         return;
     }
 
-    metrics_.total_packets++;
-
     if (first_packet_losses_) {
         seqnum_prev_loss_ = packet.rtp()->seqnum;
-        seqnum_fract_beginning_ = seqnum_prev_loss_ + 1;
         first_packet_losses_ = false;
         return;
     }
@@ -201,9 +204,7 @@ void LinkMeter::update_losses_(const packet::Packet& packet) {
         metrics_.lost_packets -= 1;
     }
 
-    if (gap >= 0) {
-        seqnum_prev_loss_ = packet.rtp()->seqnum + 1;
-    }
+    seqnum_prev_loss_ = packet.rtp()->seqnum;
 }
 
 core::nanoseconds_t rtp::LinkMeter::mean_jitter() const {
@@ -212,6 +213,10 @@ core::nanoseconds_t rtp::LinkMeter::mean_jitter() const {
 
 core::nanoseconds_t rtp::LinkMeter::var_jitter() const {
     return (core::nanoseconds_t)packet_jitter_stats_.mov_var();
+}
+
+size_t LinkMeter::running_window_len() const {
+    return win_len_;
 }
 
 } // namespace rtp
