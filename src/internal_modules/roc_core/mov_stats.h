@@ -134,11 +134,7 @@ public:
     T mov_var() const
     {
         const T n = full_ ? T(win_len_) : T(buffer_i_+1);
-        if (n == 1) {
-            return (T)sqrt(movsum2_ - movsum_ * movsum_);
-        } else {
-            return (T)sqrt((n*movsum2_ - movsum_ * movsum_) / (n * n));
-        }
+        return (T)sqrt((n*movsum2_ - movsum_ * movsum_) / (n * n));
     }
 
     T mov_max() const

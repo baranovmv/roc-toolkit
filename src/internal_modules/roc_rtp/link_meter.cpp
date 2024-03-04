@@ -211,10 +211,6 @@ core::nanoseconds_t rtp::LinkMeter::mean_jitter() const {
     return (core::nanoseconds_t)packet_jitter_stats_.mov_avg();
 }
 
-core::nanoseconds_t rtp::LinkMeter::var_jitter() const {
-    return (core::nanoseconds_t)packet_jitter_stats_.mov_var();
-}
-
 size_t LinkMeter::running_window_len() const {
     return win_len_;
 }

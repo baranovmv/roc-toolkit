@@ -95,7 +95,6 @@ public:
 
     //! Get metrics.
     core::nanoseconds_t mean_jitter() const;
-    core::nanoseconds_t var_jitter() const;
 
     size_t running_window_len() const;
 
