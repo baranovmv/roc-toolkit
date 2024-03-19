@@ -330,7 +330,7 @@ void LatencyTuner::write_metrics(const LatencyMetrics& latency_metrics,
     update_target_latency_(link_metrics.max_jitter, link_metrics.jitter,
                            latency_metrics.fec_block_duration);
 
-    fout << core::timestamp(core::ClockMonotonic)
+    fout << core::timestamp(core::ClockUnix)
         << ", " << niq_latency_
         << ", " << target_latency_
         << std::endl;
@@ -468,17 +468,18 @@ void LatencyTuner::report_() {
     }
 
     roc_log(
-        LogDebug,
+        LogInfo,
         "latency tuner:"
         " e2e_latency=%ld(%.3fms) niq_latency=%ld(%.3fms) target_latency=%ld(%.3fms)"
         " jitter=%.3fms stale=%ld(%.3fms)"
-        " fe=%.6f eff_fe=%.6f",
+        " fe=%.6f eff_fe=%.6f fe_stable=%s",
         (long)e2e_latency_, sample_spec_.stream_timestamp_delta_2_ms(e2e_latency_),
         (long)niq_latency_, sample_spec_.stream_timestamp_delta_2_ms(niq_latency_),
         (long)target_latency_, sample_spec_.stream_timestamp_delta_2_ms(target_latency_),
         (double )link_metrics_.jitter / core::Millisecond,
         (long)niq_stalling_, sample_spec_.stream_timestamp_delta_2_ms(niq_stalling_),
-        (double)(fe_ && freq_coeff_ > 0 ? fe_->freq_coeff() : 0), (double)freq_coeff_);
+        (double)(fe_ && freq_coeff_ > 0 ? fe_->freq_coeff() : 0), (double)freq_coeff_,
+        fe_->stable() ? "true" : "false");
 
 
     if (has_metrics_) {
@@ -571,20 +572,19 @@ void LatencyTuner::update_target_latency_(const core::nanoseconds_t max_jitter_n
 
             return;
         // If evaluated target latency is greater, than we must increase it.
-        } else if (estimate > cur_tl_ns &&
-                   fe_->stable()) {
+        } else if (estimate > cur_tl_ns) {
             const core::nanoseconds_t new_tl_ns = (core::nanoseconds_t)
                 (estimate * lat_update_inc_step_);
-            const packet::stream_timestamp_diff_t new_tl_ts =
+            packet::stream_timestamp_diff_t new_tl_ts =
                 sample_spec_.ns_2_stream_timestamp_delta(new_tl_ns);
 
             if (new_tl_ts > max_latency_) {
                 roc_log(LogDebug, "Latency tuner:"
-                                  " estimated latency %ld(%.3fms) is greater "
-                                  "than the limit  %ld(%.3fms), doing nothing",
+                                  " capping target latency %ld(%.3fms)"
+                                  " as max limit is lower %ld(%.3fms)",
                         (long)new_tl_ts, (double)new_tl_ns / core::Millisecond,
                         (long)max_latency_, sample_spec_.stream_timestamp_delta_2_ms(max_latency_));
-                return;
+                new_tl_ts = max_latency_;
             }
 
             roc_log(LogInfo,

@@ -26,7 +26,7 @@ LinkMeter::LinkMeter(core::IArena& arena,
     , first_packet_jitter_(true)
     , first_packet_losses_(true)
     , win_len_(latency_config.tuner_profile == audio::LatencyTunerProfile_Responsive ?
-               5000 : 15000)
+               10000 : 30000)
     , has_metrics_(false)
     , first_seqnum_(0)
     , last_seqnum_hi_(0)

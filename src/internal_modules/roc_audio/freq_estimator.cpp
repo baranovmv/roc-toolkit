@@ -161,6 +161,7 @@ double FreqEstimator::run_controller_(double current) {
 
     if (abs(error) > target_ * config_.stable_criteria && stable_) {
         stable_ = false;
+        accum_ = 0;
         last_unstable_time_ = core::timestamp(core::ClockMonotonic);
         roc_log(LogDebug,
                 "Freq Estimator: "
@@ -175,8 +176,21 @@ double FreqEstimator::run_controller_(double current) {
                 " stabilized");
     }
 
-    accum_ = accum_ + error;
-    return 1 + config_.P * error + config_.I * accum_;
+    double res = 0.;
+    // In stable state we are not using P term in order to avoid permanent variation
+    // of resampler control input.
+    if (stable_) {
+        accum_ = accum_ + error;
+        res += config_.I * accum_;
+    } else {
+        res += config_.P * error;
+    }
+    if (abs(res) > 1e-2) {
+        res = res / abs(res) * 1e-2;
+    }
+    res += 1.;
+
+    return res;
 }
 
 void FreqEstimator::update_target_latency(packet::stream_timestamp_t target_latency) {
