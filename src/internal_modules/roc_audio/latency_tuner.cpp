@@ -175,7 +175,8 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample
     , last_target_latency_update_(0)
     , lat_update_upper_thrsh_(config.upper_threshold_coef)
     , lat_update_dec_step_(upper_coef_to_step_lat_update_(config.upper_threshold_coef))
-    , lat_update_inc_step_(lower_thrs_to_step_lat_update_(config.upper_threshold_coef)) {
+    , lat_update_inc_step_(lower_thrs_to_step_lat_update_(config.upper_threshold_coef))
+    , last_lat_limit_log_(0) {
     roc_log(LogDebug,
             "latency tuner: initializing:"
             " target_latency=%ld(%.3fms) min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)"
@@ -543,9 +544,15 @@ void LatencyTuner::update_target_latency_(const core::nanoseconds_t max_jitter_n
             const packet::stream_timestamp_diff_t new_tl_ts =
                 sample_spec_.ns_2_stream_timestamp_delta(new_tl_ns);
             if (new_tl_ts < min_latency_) {
-                roc_log(LogDebug, "Latency tuner:"
-                                  " not decreasing target latency lower than limit %ld(%.3fms)",
-                        (long)min_latency_, sample_spec_.stream_timestamp_delta_2_ms(min_latency_));
+                if (now > last_lat_limit_log_ && (now - last_lat_limit_log_) >
+                        5 * core::Second) {
+                    last_lat_limit_log_ = now;
+                    roc_log(LogDebug,
+                            "Latency tuner:"
+                            " not decreasing target latency lower than limit %ld(%.3fms)",
+                            (long)min_latency_,
+                            sample_spec_.stream_timestamp_delta_2_ms(min_latency_));
+                }
                 return;
             }
 
@@ -579,11 +586,18 @@ void LatencyTuner::update_target_latency_(const core::nanoseconds_t max_jitter_n
                 sample_spec_.ns_2_stream_timestamp_delta(new_tl_ns);
 
             if (new_tl_ts > max_latency_) {
-                roc_log(LogDebug, "Latency tuner:"
-                                  " capping target latency %ld(%.3fms)"
-                                  " as max limit is lower %ld(%.3fms)",
-                        (long)new_tl_ts, (double)new_tl_ns / core::Millisecond,
-                        (long)max_latency_, sample_spec_.stream_timestamp_delta_2_ms(max_latency_));
+                if (now > last_lat_limit_log_ && (now - last_lat_limit_log_) >
+                        5 * core::Second) {
+                    last_lat_limit_log_ = now;
+
+                    roc_log(LogDebug,
+                            "Latency tuner:"
+                            " capping target latency %ld(%.3fms)"
+                            " as max limit is lower %ld(%.3fms)",
+                            (long)new_tl_ts, (double)new_tl_ns / core::Millisecond,
+                            (long)max_latency_,
+                            sample_spec_.stream_timestamp_delta_2_ms(max_latency_));
+                }
                 new_tl_ts = max_latency_;
             }
 

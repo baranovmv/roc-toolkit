@@ -134,7 +134,7 @@ struct LatencyConfig {
         , stale_tolerance(0)
         , scaling_interval(0)
         , scaling_tolerance(0)
-        , upper_threshold_coef(0) {
+        , upper_threshold_coef(1.7f) {
     }
 
     //! Automatically fill missing settings.
@@ -274,6 +274,8 @@ private:
     float lower_thrs_to_step_lat_update_(float upper_threshold_coef);
     const float lat_update_dec_step_;
     const float lat_update_inc_step_;
+
+    core::nanoseconds_t last_lat_limit_log_;
 };
 
 //! Get string name of latency backend.
