@@ -10,6 +10,7 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_core/time.h"
+#include <fstream>
 
 namespace roc {
 namespace audio {
@@ -107,9 +108,18 @@ float FreqEstimator::freq_coeff() const {
 }
 
 void FreqEstimator::update(packet::stream_timestamp_t current) {
+    static std::ofstream fout("/tmp/fe.log", std::ios::out);
+
     double filtered;
 
     if (run_decimators_(current, filtered)) {
+        fout << core::timestamp(core::ClockUnix)
+            << ", " << filtered
+            << ", " << target_
+            << ", " << (filtered - target_) * config_.P
+            << ", " << accum_ * config_.I
+            << std::endl;
+        fout.flush();
         coeff_ = run_controller_(filtered);
     }
 }
@@ -213,6 +223,10 @@ static const char* fe_profile_to_str(FreqEstimatorProfile profile) {
 
     return "<invalid>";
 }
+
+// TODO:
+// * overshoot -- почему аккумулятор должен быть равен площади ошибки?
+// * stable точно норм определяется аккумулятором?
 
 } // namespace audio
 } // namespace roc

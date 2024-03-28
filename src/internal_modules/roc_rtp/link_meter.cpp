@@ -161,8 +161,8 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
         metrics_.min_jitter = (core::nanoseconds_t)packet_jitter_stats_.mov_min();
         metrics_.jitter = mean_jitter();
 
-        fout << packet.rtp()->stream_timestamp
-             << ", " << packet.udp()->enqueue_ts
+        fout << packet.udp()->enqueue_ts
+             << ", " << packet.rtp()->stream_timestamp
              << ", " << (double)std::abs(d_enq_ns - d_s_ns) / core::Millisecond
              << ", " << packet_jitter_stats_.mov_max()
              << ", " << packet_jitter_stats_.mov_min()
