@@ -121,7 +121,7 @@ private:
     uint32_t last_seqnum_hi_;
     uint16_t last_seqnum_lo_;
 
-    size_t lost_;
+    ssize_t processed_packets_;
     packet::seqnum_t seqnum_prev_loss_;
     core::nanoseconds_t prev_packet_enq_ts_;
     packet::stream_timestamp_t prev_stream_timestamp_;

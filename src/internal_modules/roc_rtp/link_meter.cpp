@@ -31,6 +31,8 @@ LinkMeter::LinkMeter(core::IArena& arena,
     , first_seqnum_(0)
     , last_seqnum_hi_(0)
     , last_seqnum_lo_(0)
+    , processed_packets_(0)
+    , seqnum_prev_loss_(0)
     , prev_packet_enq_ts_(-1)
     , prev_stream_timestamp_(0)
     , packet_jitter_stats_(arena, win_len_) {
@@ -189,22 +191,19 @@ void LinkMeter::update_losses_(const packet::Packet& packet) {
         return;
     }
 
-    if (first_packet_losses_) {
-        seqnum_prev_loss_ = packet.rtp()->seqnum;
-        first_packet_losses_ = false;
-        return;
+    processed_packets_++;
+
+    const packet::seqnum_t pkt_seqnum = packet.rtp()->seqnum;
+    if (packet::seqnum_diff(pkt_seqnum, last_seqnum_lo_) > 0) {
+        roc_panic("link meter: seqnum was not processed in writer part");
     }
-    const ssize_t gap = packet::seqnum_diff(packet.rtp()->seqnum, seqnum_prev_loss_ + 1);
+    metrics_.lost_packets = (ssize_t)metrics_.total_packets - processed_packets_;
 
-    fout << packet.rtp()->seqnum << ", " << gap << std::endl;
+    const ssize_t gap = packet::seqnum_diff(pkt_seqnum, seqnum_prev_loss_ + 1);
 
-    if (gap > 0) {
-        metrics_.lost_packets += gap;
-    } else if (gap < 0 && metrics_.lost_packets >= 1) {
-        metrics_.lost_packets -= 1;
-    }
+    fout << pkt_seqnum << ", " << gap << std::endl;
 
-    seqnum_prev_loss_ = packet.rtp()->seqnum;
+    seqnum_prev_loss_ = pkt_seqnum;
 }
 
 core::nanoseconds_t rtp::LinkMeter::mean_jitter() const {

@@ -333,7 +333,7 @@ TEST(link_meter, losses_test) {
     LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
     meter.set_writer(queue);
     meter.set_reader(queue);
-    const size_t num_packets = Duration * 100;
+    const size_t num_packets = Duration * 2 * (1 << 16);
     size_t total_losses = 0;
     size_t fract_losses_cntr = 0;
 
@@ -346,8 +346,9 @@ TEST(link_meter, losses_test) {
         sts += stream_step_ts;
 
         if (i > 0 && core::fast_random_range(0, 100) < 30) {
-            total_losses++;
-            fract_losses_cntr++;
+            i += 99;
+            total_losses += 100;
+            fract_losses_cntr += 100;
             continue;
         } else {
             CHECK_EQUAL(status::StatusOK, meter.write(p));
