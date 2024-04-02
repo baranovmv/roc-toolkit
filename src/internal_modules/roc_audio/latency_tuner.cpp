@@ -328,8 +328,10 @@ void LatencyTuner::write_metrics(const LatencyMetrics& latency_metrics,
         has_e2e_latency_ = true;
     }
 
-    update_target_latency_(link_metrics.max_jitter, link_metrics.jitter,
-                           latency_metrics.fec_block_duration);
+    if (enable_tuning_) {
+        update_target_latency_(link_metrics.max_jitter, link_metrics.jitter,
+                               latency_metrics.fec_block_duration);
+    }
 
     fout << core::timestamp(core::ClockUnix)
         << ", " << niq_latency_
@@ -480,7 +482,7 @@ void LatencyTuner::report_() {
         (double )link_metrics_.jitter / core::Millisecond,
         (long)niq_stalling_, sample_spec_.stream_timestamp_delta_2_ms(niq_stalling_),
         (double)(fe_ && freq_coeff_ > 0 ? fe_->freq_coeff() : 0), (double)freq_coeff_,
-        fe_->stable() ? "true" : "false");
+        fe_ && fe_->stable() ? "true" : "false");
 
 
     if (has_metrics_) {
