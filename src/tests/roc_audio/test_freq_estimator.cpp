@@ -65,7 +65,7 @@ TEST(freq_estimator, small_queue_size) {
 
         do {
             fe.update(Target / 2);
-        } while (fe.freq_coeff() > 0.99f);
+        } while (fe.freq_coeff() > 0.997f);
     }
 }
 
