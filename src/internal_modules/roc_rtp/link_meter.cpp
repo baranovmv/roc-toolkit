@@ -21,10 +21,8 @@ LinkMeter::LinkMeter(core::IArena& arena,
     : encoding_map_(encoding_map)
     , encoding_(NULL)
     , writer_(NULL)
-    , reader_(NULL)
     , sample_spec_(sample_spec)
     , first_packet_jitter_(true)
-    , first_packet_losses_(true)
     , win_len_(latency_config.tuner_profile == audio::LatencyTunerProfile_Responsive ?
                10000 : 30000)
     , has_metrics_(false)
@@ -32,7 +30,6 @@ LinkMeter::LinkMeter(core::IArena& arena,
     , last_seqnum_hi_(0)
     , last_seqnum_lo_(0)
     , processed_packets_(0)
-    , seqnum_prev_loss_(0)
     , prev_packet_enq_ts_(-1)
     , prev_stream_timestamp_(0)
     , packet_jitter_stats_(arena, win_len_) {
@@ -90,31 +87,8 @@ status::StatusCode LinkMeter::write(const packet::PacketPtr& packet) {
     return writer_->write(packet);
 }
 
-status::StatusCode LinkMeter::read(packet::PacketPtr& packet) {
-    if (!reader_) {
-        roc_panic("link meter: forgot to call set_reader()");
-    }
-
-    const status::StatusCode code = reader_->read(packet);
-    if (code != status::StatusOK) {
-        return code;
-    }
-
-    if (packet->rtp()) {
-        update_losses_(*packet);
-    } else {
-        roc_panic("link meter: non-rtp packet on reader input");
-    }
-
-    return status::StatusOK;
-}
-
 void LinkMeter::set_writer(packet::IWriter& writer) {
     writer_ = &writer;
-}
-
-void LinkMeter::set_reader(packet::IReader& reader) {
-    reader_ = &reader;
 }
 
 void LinkMeter::update_jitter_(const packet::Packet& packet) {
@@ -175,35 +149,14 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 
     prev_packet_enq_ts_ = packet.udp()->enqueue_ts;
     prev_stream_timestamp_ = packet.rtp()->stream_timestamp;
+    processed_packets_++;
 
     metrics_.ext_first_seqnum = first_seqnum_;
     metrics_.ext_last_seqnum = last_seqnum_hi_ + last_seqnum_lo_;
     metrics_.total_packets = metrics_.ext_last_seqnum - first_seqnum_ + 1;
-
-    has_metrics_ = true;
-}
-
-void LinkMeter::update_losses_(const packet::Packet& packet) {
-    static std::ofstream fout("/tmp/loss.log", std::ios::out);
-
-    // Do not calculate losses on recovered packets.
-     if (packet.has_flags(packet::Packet::FlagRestored)) {
-        return;
-    }
-
-    processed_packets_++;
-
-    const packet::seqnum_t pkt_seqnum = packet.rtp()->seqnum;
-    if (packet::seqnum_diff(pkt_seqnum, last_seqnum_lo_) > 0) {
-        roc_panic("link meter: seqnum was not processed in writer part");
-    }
     metrics_.lost_packets = (ssize_t)metrics_.total_packets - processed_packets_;
 
-    const ssize_t gap = packet::seqnum_diff(pkt_seqnum, seqnum_prev_loss_ + 1);
-
-    fout << pkt_seqnum << ", " << gap << std::endl;
-
-    seqnum_prev_loss_ = pkt_seqnum;
+    has_metrics_ = true;
 }
 
 core::nanoseconds_t rtp::LinkMeter::mean_jitter() const {

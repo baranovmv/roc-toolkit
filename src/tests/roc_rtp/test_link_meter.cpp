@@ -332,7 +332,6 @@ TEST(link_meter, losses_test) {
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
     LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
     meter.set_writer(queue);
-    meter.set_reader(queue);
     const size_t num_packets = Duration * 2 * (1 << 16);
     size_t total_losses = 0;
     size_t fract_losses_cntr = 0;
@@ -355,7 +354,7 @@ TEST(link_meter, losses_test) {
         }
 
         packet::PacketPtr pr;
-        CHECK_EQUAL(status::StatusOK, meter.read(pr));
+        CHECK_EQUAL(status::StatusOK, queue.read(pr));
         CHECK_EQUAL(pr->rtp()->seqnum, p->rtp()->seqnum);
 
         if (i > 0) {

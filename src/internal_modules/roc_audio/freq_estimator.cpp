@@ -224,9 +224,5 @@ static const char* fe_profile_to_str(FreqEstimatorProfile profile) {
     return "<invalid>";
 }
 
-// TODO:
-// * overshoot -- почему аккумулятор должен быть равен площади ошибки?
-// * stable точно норм определяется аккумулятором?
-
 } // namespace audio
 } // namespace roc

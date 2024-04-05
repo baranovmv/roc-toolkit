@@ -85,9 +85,6 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
     }
     pkt_reader = delayed_reader_.get();
 
-    source_meter_->set_reader(*pkt_reader);
-    pkt_reader = source_meter_.get();
-
     if (session_config.fec_decoder.scheme != packet::FEC_None) {
         repair_queue_.reset(new (repair_queue_) packet::SortedQueue(0));
         if (!repair_queue_) {
@@ -133,9 +130,6 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
             return;
         }
         pkt_reader = fec_filter_.get();
-
-        repair_meter_->set_reader(*pkt_reader);
-        pkt_reader = repair_meter_.get();
     }
 
     timestamp_injector_.reset(new (timestamp_injector_) rtp::TimestampInjector(

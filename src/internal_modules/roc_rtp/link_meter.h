@@ -45,7 +45,6 @@ namespace rtp {
 //! writer/reader, and updates metrics.
 class LinkMeter : public packet::ILinkMeter,
                   public packet::IWriter,
-                  public packet::IReader,
                   public core::NonCopyable<> {
 public:
     //! Initialize.
@@ -78,20 +77,10 @@ public:
     //!  Invoked early in pipeline right after the packet is received.
     virtual ROC_ATTR_NODISCARD status::StatusCode write(const packet::PacketPtr& packet);
 
-    //! Read packet and update metrics.
-    //! @remarks
-    //!  Invoked late in pipeline right before the packet is decoded.
-    virtual ROC_ATTR_NODISCARD status::StatusCode read(packet::PacketPtr& packet);
-
     //! Set nested packet writer.
     //! @remarks
     //!  Should be called before first write() call.
     void set_writer(packet::IWriter& writer);
-
-    //! Set nested packet reader.
-    //! @remarks
-    //!  Should be called before first read() call.
-    void set_reader(packet::IReader& reader);
 
     //! Get metrics.
     core::nanoseconds_t mean_jitter() const;
@@ -100,18 +89,15 @@ public:
 
 private:
     void update_jitter_(const packet::Packet& packet);
-    void update_losses_(const packet::Packet& packet);
 
     const EncodingMap& encoding_map_;
     const Encoding* encoding_;
 
     packet::IWriter* writer_;
-    packet::IReader* reader_;
 
     const audio::SampleSpec sample_spec_;
 
     bool first_packet_jitter_;
-    bool first_packet_losses_;
     const size_t win_len_;
     bool has_metrics_;
 
@@ -122,7 +108,6 @@ private:
     uint16_t last_seqnum_lo_;
 
     ssize_t processed_packets_;
-    packet::seqnum_t seqnum_prev_loss_;
     core::nanoseconds_t prev_packet_enq_ts_;
     packet::stream_timestamp_t prev_stream_timestamp_;
     core::MovStats<core::nanoseconds_t> packet_jitter_stats_;
