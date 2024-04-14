@@ -393,6 +393,10 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (args.dump_given) {
+        receiver_config.dump_file = args.dump_arg;
+    }
+
     node::Receiver receiver(context, receiver_config);
     if (!receiver.is_valid()) {
         roc_log(LogError, "can't create receiver node");

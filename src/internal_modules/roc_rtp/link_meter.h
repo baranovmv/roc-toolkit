@@ -14,6 +14,7 @@
 
 #include "roc_audio/latency_monitor.h"
 #include "roc_audio/sample_spec.h"
+#include "roc_core/csv_dumper.h"
 #include "roc_core/iarena.h"
 #include "roc_core/mov_stats.h"
 #include "roc_core/noncopyable.h"
@@ -49,9 +50,10 @@ class LinkMeter : public packet::ILinkMeter,
 public:
     //! Initialize.
     explicit LinkMeter(core::IArena& arena,
-                    const EncodingMap& encoding_map,
-                     const audio::SampleSpec& sample_spec,
-                       audio::LatencyConfig latency_config);
+                       const EncodingMap& encoding_map,
+                       const audio::SampleSpec& sample_spec,
+                       audio::LatencyConfig latency_config,
+                       core::CsvDumper* dumper);
 
     //! Check if metrics are already gathered and can be reported.
     virtual bool has_metrics() const;
@@ -111,6 +113,8 @@ private:
     core::nanoseconds_t prev_packet_enq_ts_;
     packet::stream_timestamp_t prev_stream_timestamp_;
     core::MovStats<core::nanoseconds_t> packet_jitter_stats_;
+
+    core::CsvDumper* dumper_;
 };
 
 } // namespace rtp

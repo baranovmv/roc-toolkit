@@ -17,6 +17,7 @@
 #include "roc_audio/mixer.h"
 #include "roc_audio/pcm_mapper_reader.h"
 #include "roc_audio/profiling_reader.h"
+#include "roc_core/csv_dumper.h"
 #include "roc_core/iarena.h"
 #include "roc_core/optional.h"
 #include "roc_core/stddefs.h"
@@ -134,6 +135,9 @@ private:
     audio::IFrameReader* frame_reader_;
 
     bool valid_;
+
+    const core::CsvConfig dumper_config_;
+    core::Optional<core::CsvDumper> dumper_;
 };
 
 } // namespace pipeline

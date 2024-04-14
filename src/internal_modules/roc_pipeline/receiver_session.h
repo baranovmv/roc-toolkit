@@ -22,6 +22,7 @@
 #include "roc_audio/latency_monitor.h"
 #include "roc_audio/resampler_reader.h"
 #include "roc_audio/watchdog.h"
+#include "roc_core/csv_dumper.h"
 #include "roc_core/iarena.h"
 #include "roc_core/list_node.h"
 #include "roc_core/optional.h"
@@ -64,6 +65,7 @@ public:
                     const rtp::EncodingMap& encoding_map,
                     packet::PacketFactory& packet_factory,
                     audio::FrameFactory& frame_factory,
+                    core::CsvDumper* dumper,
                     core::IArena& arena);
 
     //! Check if the session was succefully constructed.
@@ -147,6 +149,8 @@ private:
     core::SharedPtr<audio::IResampler> resampler_;
 
     core::Optional<audio::LatencyMonitor> latency_monitor_;
+
+    core::CsvDumper* dumper_;
 
     bool valid_;
 };

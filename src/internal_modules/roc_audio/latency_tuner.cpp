@@ -10,7 +10,6 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_core/time.h"
-#include <fstream>
 
 namespace roc {
 namespace audio {
@@ -146,7 +145,9 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
     }
 }
 
-LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample_spec)
+LatencyTuner::LatencyTuner(const LatencyConfig& config,
+                           const SampleSpec& sample_spec,
+                           core::CsvDumper* dumper)
     : stream_pos_(0)
     , scale_interval_(0)
     , scale_pos_(0)
@@ -176,7 +177,8 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample
     , lat_update_upper_thrsh_(config.upper_threshold_coef)
     , lat_update_dec_step_(upper_coef_to_step_lat_update_(config.upper_threshold_coef))
     , lat_update_inc_step_(lower_thrs_to_step_lat_update_(config.upper_threshold_coef))
-    , last_lat_limit_log_(0) {
+    , last_lat_limit_log_(0)
+    , dumper_(dumper) {
     roc_log(LogDebug,
             "latency tuner: initializing:"
             " target_latency=%ld(%.3fms) min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)"
@@ -289,11 +291,11 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config, const SampleSpec& sample
                     " upper_threshold_coef=%f", (double)config.upper_threshold_coef);
             }
 
-            fe_.reset(new (fe_)
-                          FreqEstimator(profile_ == LatencyTunerProfile_Responsive
-                                            ? FreqEstimatorProfile_Responsive
-                                            : FreqEstimatorProfile_Gradual,
-                                        (packet::stream_timestamp_t)target_latency_));
+            fe_.reset(new (fe_) FreqEstimator(profile_ == LatencyTunerProfile_Responsive
+                                                  ? FreqEstimatorProfile_Responsive
+                                                  : FreqEstimatorProfile_Gradual,
+                                              (packet::stream_timestamp_t)target_latency_,
+                                              dumper_));
             if (!fe_) {
                 return;
             }
@@ -309,8 +311,6 @@ bool LatencyTuner::is_valid() const {
 
 void LatencyTuner::write_metrics(const LatencyMetrics& latency_metrics,
                                  const packet::LinkMetrics& link_metrics) {
-    static std::ofstream fout("/tmp/tuner.log", std::ios::out);
-
     roc_panic_if(!is_valid());
 
     if (latency_metrics.niq_latency > 0 || latency_metrics.niq_stalling > 0
@@ -333,10 +333,15 @@ void LatencyTuner::write_metrics(const LatencyMetrics& latency_metrics,
                                latency_metrics.fec_block_duration);
     }
 
-    fout << core::timestamp(core::ClockUnix)
-        << ", " << niq_latency_
-        << ", " << target_latency_
-        << std::endl;
+    if (dumper_) {
+        core::CsvEntry e;
+        e.type = 't';
+        e.n_fields = 3;
+        e.fields[0] = core::timestamp(core::ClockUnix);
+        e.fields[1] = niq_latency_;
+        e.fields[2] = target_latency_;
+        dumper_->write(e);
+    }
 
     latency_metrics_ = latency_metrics;
     link_metrics_ = link_metrics;

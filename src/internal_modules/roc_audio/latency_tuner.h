@@ -14,6 +14,7 @@
 
 #include "roc_audio/freq_estimator.h"
 #include "roc_audio/sample_spec.h"
+#include "roc_core/csv_dumper.h"
 #include "roc_core/noncopyable.h"
 #include "roc_core/optional.h"
 #include "roc_core/time.h"
@@ -183,7 +184,9 @@ struct LatencyMetrics {
 class LatencyTuner : public core::NonCopyable<> {
 public:
     //! Initialize.
-    LatencyTuner(const LatencyConfig& config, const SampleSpec& sample_spec);
+    LatencyTuner(const LatencyConfig& config,
+                 const SampleSpec& sample_spec,
+                 core::CsvDumper* dumper);
 
     //! Check if the object was initialized successfully.
     bool is_valid() const;
@@ -276,6 +279,8 @@ private:
     const float lat_update_inc_step_;
 
     core::nanoseconds_t last_lat_limit_log_;
+
+    core::CsvDumper* dumper_;
 };
 
 //! Get string name of latency backend.

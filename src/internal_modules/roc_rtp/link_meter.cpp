@@ -9,15 +9,15 @@
 #include "roc_core/panic.h"
 #include "roc_packet/units.h"
 #include "link_meter.h"
-#include <fstream>
 
 namespace roc {
 namespace rtp {
 
 LinkMeter::LinkMeter(core::IArena& arena,
-                    const EncodingMap& encoding_map,
+                     const EncodingMap& encoding_map,
                      const audio::SampleSpec& sample_spec,
-                     audio::LatencyConfig latency_config)
+                     audio::LatencyConfig latency_config,
+                     core::CsvDumper* dumper)
     : encoding_map_(encoding_map)
     , encoding_(NULL)
     , writer_(NULL)
@@ -32,7 +32,8 @@ LinkMeter::LinkMeter(core::IArena& arena,
     , processed_packets_(0)
     , prev_packet_enq_ts_(-1)
     , prev_stream_timestamp_(0)
-    , packet_jitter_stats_(arena, win_len_) {
+    , packet_jitter_stats_(arena, win_len_)
+    , dumper_(dumper) {
 }
 
 bool LinkMeter::has_metrics() const {
@@ -92,8 +93,6 @@ void LinkMeter::set_writer(packet::IWriter& writer) {
 }
 
 void LinkMeter::update_jitter_(const packet::Packet& packet) {
-    static std::ofstream fout("/tmp/jitt.log", std::ios::out);
-
     // Do not calculate jitter on recovered packets.
     if (packet.has_flags(packet::Packet::FlagRestored)) {
         return;
@@ -137,12 +136,17 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
         metrics_.min_jitter = (core::nanoseconds_t)packet_jitter_stats_.mov_min();
         metrics_.jitter = mean_jitter();
 
-        fout << packet.udp()->enqueue_ts
-             << ", " << packet.rtp()->stream_timestamp
-             << ", " << (double)std::abs(d_enq_ns - d_s_ns) / core::Millisecond
-             << ", " << packet_jitter_stats_.mov_max()
-             << ", " << packet_jitter_stats_.mov_min()
-             << std::endl;
+        if (dumper_) {
+            core::CsvEntry e;
+            e.type = 'm';
+            e.n_fields = 5;
+            e.fields[0] = packet.udp()->enqueue_ts;
+            e.fields[1] = packet.rtp()->stream_timestamp;
+            e.fields[2] = (double)std::abs(d_enq_ns - d_s_ns) / core::Millisecond;
+            e.fields[3] = packet_jitter_stats_.mov_max();
+            e.fields[4] = packet_jitter_stats_.mov_min();
+            dumper_->write(e);
+        }
     } else {
         first_packet_jitter_ = false;
     }

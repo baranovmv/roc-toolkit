@@ -20,9 +20,11 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
                                  const rtp::EncodingMap& encoding_map,
                                  packet::PacketFactory& packet_factory,
                                  audio::FrameFactory& frame_factory,
+    core::CsvDumper* dumper,
                                  core::IArena& arena)
     : core::RefCounted<ReceiverSession, core::ArenaAllocation>(arena)
     , frame_reader_(NULL)
+    , dumper_(dumper)
     , valid_(false) {
     const rtp::Encoding* pkt_encoding =
         encoding_map.find_by_pt(session_config.payload_type);
@@ -46,9 +48,8 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
     }
     pkt_writer = source_queue_.get();
 
-    source_meter_.reset(new (source_meter_)
-                            rtp::LinkMeter(arena, encoding_map, pkt_encoding->sample_spec,
-                                           session_config.latency));
+    source_meter_.reset(new (source_meter_) rtp::LinkMeter(
+        arena, encoding_map, pkt_encoding->sample_spec, session_config.latency, dumper_));
     if (!source_meter_) {
         return;
     }
@@ -91,9 +92,9 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
             return;
         }
 
-        repair_meter_.reset(new (repair_meter_)
-                                rtp::LinkMeter(arena, encoding_map, pkt_encoding->sample_spec,
-                                               session_config.latency));
+        repair_meter_.reset(new (repair_meter_) rtp::LinkMeter(
+            arena, encoding_map, pkt_encoding->sample_spec, session_config.latency,
+            dumper_));
         if (!repair_meter_) {
             return;
         }
@@ -214,7 +215,7 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
     latency_monitor_.reset(new (latency_monitor_) audio::LatencyMonitor(
         *frm_reader, *source_queue_, *depacketizer_, *source_meter_, fec_reader_.get(),
         resampler_reader_.get(), session_config.latency, pkt_encoding->sample_spec,
-        common_config.output_sample_spec));
+        common_config.output_sample_spec, dumper_));
     if (!latency_monitor_ || !latency_monitor_->is_valid()) {
         return;
     }

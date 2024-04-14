@@ -10,7 +10,6 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_core/time.h"
-#include <fstream>
 
 namespace roc {
 namespace audio {
@@ -66,7 +65,8 @@ double dot_prod(const double* coeff,
 } // namespace
 
 FreqEstimator::FreqEstimator(FreqEstimatorProfile profile,
-                             packet::stream_timestamp_t target_latency)
+                             packet::stream_timestamp_t target_latency,
+                             core::CsvDumper* dumper)
     : config_(make_config(profile))
     , target_(target_latency)
     , dec1_ind_(0)
@@ -75,7 +75,8 @@ FreqEstimator::FreqEstimator(FreqEstimatorProfile profile,
     , accum_(0)
     , coeff_(1)
     , stable_(false)
-    , last_unstable_time_(core::timestamp(core::ClockMonotonic)) {
+    , last_unstable_time_(core::timestamp(core::ClockMonotonic))
+    , dumper_(dumper) {
     roc_log(LogDebug, "freq estimator: initializing: P=%e I=%e dc1=%lu dc2=%lu",
             config_.P, config_.I, (unsigned long)config_.decimation_factor1,
             (unsigned long)config_.decimation_factor2);
@@ -108,18 +109,20 @@ float FreqEstimator::freq_coeff() const {
 }
 
 void FreqEstimator::update(packet::stream_timestamp_t current) {
-    static std::ofstream fout("/tmp/fe.log", std::ios::out);
-
     double filtered;
 
     if (run_decimators_(current, filtered)) {
-        fout << core::timestamp(core::ClockUnix)
-            << ", " << filtered
-            << ", " << target_
-            << ", " << (filtered - target_) * config_.P
-            << ", " << accum_ * config_.I
-            << std::endl;
-        fout.flush();
+        if (dumper_) {
+            core::CsvEntry e;
+            e.type = 'f';
+            e.n_fields = 5;
+            e.fields[0] = core::timestamp(core::ClockUnix);
+            e.fields[1] = filtered;
+            e.fields[2] = target_;
+            e.fields[3] = (filtered - target_) * config_.P;
+            e.fields[4] = accum_ * config_.I;
+            dumper_->write(e);
+        }
         coeff_ = run_controller_(filtered);
     }
 }

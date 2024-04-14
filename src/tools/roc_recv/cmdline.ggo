@@ -81,6 +81,9 @@ section "Options"
     option "color" - "Set colored logging mode for stderr output"
         values="auto","always","never" default="auto" enum optional
 
+    option "dump" - "Path for a CSV file where to dump some useful run-time metrics"
+        string optional
+
 text "
 ENDPOINT_URI is a network endpoint URI, e.g.:
   rtp://0.0.0.0:10001; rtp+rs8m://127.0.0.1:10001; rs8m://[::1]:10001

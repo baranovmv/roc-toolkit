@@ -77,7 +77,7 @@ TEST(link_meter, last_seqnum) {
     packet::Queue queue;
     audio::LatencyConfig latency_config;
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
-    LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
     meter.set_writer(queue);
     core::nanoseconds_t ts = start_ts;
     packet::stream_timestamp_t sts = stream_start_ts;
@@ -116,7 +116,7 @@ TEST(link_meter, last_seqnum_wrap) {
     packet::Queue queue;
     audio::LatencyConfig latency_config;
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
-    LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
     meter.set_writer(queue);
     core::nanoseconds_t ts = start_ts;
     packet::stream_timestamp_t sts = stream_start_ts;
@@ -154,7 +154,7 @@ TEST(link_meter, forward_error) {
     StatusWriter writer(status::StatusNoMem);
     audio::LatencyConfig latency_config;
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
-    LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
     meter.set_writer(writer);
 
     CHECK_EQUAL(status::StatusNoMem, meter.write(new_packet(100, start_ts,
@@ -165,7 +165,7 @@ TEST(link_meter, jitter_test) {
     packet::Queue queue;
     audio::LatencyConfig latency_config;
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
-    LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
     const ssize_t RunningWinLen = (ssize_t)meter.running_window_len();
     meter.set_writer(queue);
     const size_t num_packets = Duration * 100;
@@ -219,7 +219,7 @@ TEST(link_meter, ascending_test) {
     packet::Queue queue;
     audio::LatencyConfig latency_config;
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
-    LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
     const ssize_t RunningWinLen = (ssize_t)meter.running_window_len();
     meter.set_writer(queue);
     const size_t num_packets = Duration * 100;
@@ -254,7 +254,7 @@ TEST(link_meter, descending_test) {
     packet::Queue queue;
     audio::LatencyConfig latency_config;
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
-    LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
     const ssize_t RunningWinLen = (ssize_t)meter.running_window_len();
     meter.set_writer(queue);
     const size_t num_packets = Duration * 100;
@@ -289,7 +289,7 @@ TEST(link_meter, saw_test) {
     packet::Queue queue;
     audio::LatencyConfig latency_config;
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
-    LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
     const ssize_t RunningWinLen = (ssize_t)meter.running_window_len();
     meter.set_writer(queue);
     const size_t num_packets = Duration * 100;
@@ -330,7 +330,7 @@ TEST(link_meter, losses_test) {
     packet::Queue queue;
     audio::LatencyConfig latency_config;
     latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
-    LinkMeter meter(arena, encoding_map, sample_spec, latency_config);
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
     meter.set_writer(queue);
     const size_t num_packets = Duration * 2 * (1 << 16);
     size_t total_losses = 0;

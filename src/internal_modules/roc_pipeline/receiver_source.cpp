@@ -25,7 +25,8 @@ ReceiverSource::ReceiverSource(const ReceiverSourceConfig& source_config,
     , frame_factory_(frame_buffer_pool)
     , arena_(arena)
     , frame_reader_(NULL)
-    , valid_(false) {
+    , valid_(false)
+    , dumper_config_() {
     source_config_.deduce_defaults();
 
     audio::IFrameReader* frm_reader = NULL;
@@ -68,6 +69,12 @@ ReceiverSource::ReceiverSource(const ReceiverSourceConfig& source_config,
 
     frame_reader_ = frm_reader;
     valid_ = true;
+
+    if (source_config.dump_file) {
+        dumper_.reset(new (dumper_) core::CsvDumper(source_config.dump_file,
+                                                    dumper_config_, arena));
+        dumper_->start();
+    }
 }
 
 bool ReceiverSource::is_valid() const {
@@ -81,7 +88,8 @@ ReceiverSlot* ReceiverSource::create_slot(const ReceiverSlotConfig& slot_config)
 
     core::SharedPtr<ReceiverSlot> slot =
         new (arena_) ReceiverSlot(source_config_, slot_config, state_tracker_, *mixer_,
-                                  encoding_map_, packet_factory_, frame_factory_, arena_);
+                                  encoding_map_, packet_factory_, frame_factory_,
+                                  dumper_.get(), arena_);
 
     if (!slot || !slot->is_valid()) {
         roc_log(LogError, "receiver source: can't create slot");

@@ -14,6 +14,7 @@
 
 #include "roc_audio/freq_estimator_decim.h"
 #include "roc_audio/sample.h"
+#include "roc_core/csv_dumper.h"
 #include "roc_core/noncopyable.h"
 #include "roc_packet/units.h"
 
@@ -72,7 +73,8 @@ public:
     //!  - @p profile defines configuration preset.
     //!  - @p target_latency defines latency we want to archive.
     FreqEstimator(FreqEstimatorProfile profile,
-                  packet::stream_timestamp_t target_latency);
+                  packet::stream_timestamp_t target_latency,
+                  roc::core::CsvDumper* dumper);
 
     //! Get current frequecy coefficient.
     float freq_coeff() const;
@@ -107,6 +109,8 @@ private:
     bool stable_; // True if FreqEstimator has stabilized.
     // Last time when FreqEstimator was out of range.
     core::nanoseconds_t last_unstable_time_;
+
+    core::CsvDumper* dumper_;
 };
 
 } // namespace audio
