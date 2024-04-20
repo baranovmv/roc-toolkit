@@ -141,8 +141,12 @@ status::StatusCode Reader::get_next_packet_(packet::PacketPtr& ptr) {
     fill_block_();
 
     packet::PacketPtr pp = source_block_[next_packet_];
-    if (pp && next_packet_ == 0) {
-        update_block_duration_(pp);
+    if (next_packet_ == 0) {
+        if (pp) {
+            update_block_duration_(pp);
+        } else {
+            prev_block_timestamp_valid_ = false;
+        }
     }
 
     do {
@@ -162,18 +166,10 @@ status::StatusCode Reader::get_next_packet_(packet::PacketPtr& ptr) {
 
             if (pos == source_block_.size()) {
                 if (source_queue_.size() == 0) {
-                    prev_block_timestamp_valid_ = false;
                     return status::StatusNoData;
                 }
             } else {
                 pp = source_block_[pos++];
-                if (pp && pos == 1) {
-                    update_block_duration_(pp);
-                }
-            }
-
-            if (!pp && next_packet_ == 0) {
-                prev_block_timestamp_valid_ = false;
             }
             next_packet_ = pos;
         } else {
