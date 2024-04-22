@@ -41,8 +41,8 @@ Writer::Writer(const WriterConfig& config,
     , valid_(false)
     , alive_(true)
     , prev_block_timestamp_valid_(false)
-     , prev_block_timestamp_(0)
-     , block_max_duration_(0) {
+    , prev_block_timestamp_(0)
+    , block_max_duration_(0) {
     cur_sbn_ = (packet::blknum_t)core::fast_random_range(0, packet::blknum_t(-1));
     cur_block_repair_sn_ =
         (packet::seqnum_t)core::fast_random_range(0, packet::seqnum_t(-1));
@@ -350,7 +350,7 @@ void Writer::update_block_duration_(const packet::PacketPtr& ptr) {
     if (!ptr->rtp()) {
         return;
     }
-    packet::stream_timestamp_diff_t  block_dur = 0;
+    packet::stream_timestamp_diff_t block_dur = 0;
     if (prev_block_timestamp_valid_) {
         block_dur = packet::stream_timestamp_diff(ptr->rtp()->stream_timestamp,
                                                   prev_block_timestamp_);

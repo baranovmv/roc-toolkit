@@ -9,8 +9,8 @@
 //! @file roc_core/mov_stats.h
 //! @brief Profiler.
 
-#ifndef ROC_TOOLKIT_MOV_STATS_H
-#define ROC_TOOLKIT_MOV_STATS_H
+#ifndef ROC_CORE_MOV_STATS_H_
+#define ROC_CORE_MOV_STATS_H_
 
 #include "roc_core/array.h"
 #include "roc_core/iarena.h"
@@ -25,8 +25,7 @@ namespace core {
 //! described in https://www.dsprelated.com/showthread/comp.dsp/97276-1.php
 //!
 //! @tparam T defines a sample type.
-template <typename T>
-class MovStats {
+template <typename T> class MovStats {
 public:
     //! Initialize.
     MovStats(IArena& arena, const size_t win_len)
@@ -40,25 +39,23 @@ public:
         , mov_max_cntr_(0)
         , full_(false)
         , first_(true)
-        , queue_max_(arena, win_len+1)
+        , queue_max_(arena, win_len + 1)
         , curr_max_(T(0))
-        , queue_min_(arena, win_len+1)
-        , curr_min_(T(0))
-    {
-        if(!buffer_.resize(win_len)){
+        , queue_min_(arena, win_len + 1)
+        , curr_min_(T(0)) {
+        if (!buffer_.resize(win_len)) {
             roc_panic("MovStats: can't allocate storage for the ring buffer");
         }
-        if(!buffer2_.resize(win_len)){
+        if (!buffer2_.resize(win_len)) {
             roc_panic("MovStats: can't allocate storage for the ring buffer");
         }
-        memset(buffer_.data(), 0, sizeof(T)*buffer_.size());
-        memset(buffer2_.data(), 0, sizeof(T)*buffer2_.size());
+        memset(buffer_.data(), 0, sizeof(T) * buffer_.size());
+        memset(buffer2_.data(), 0, sizeof(T) * buffer2_.size());
     }
 
     //! Shift rolling window by one sample x.
-    void add(const T& x)
-    {
-        const T x2 = x*x;
+    void add(const T& x) {
+        const T x2 = x * x;
         const T x_old = buffer_[buffer_i_];
         buffer_[buffer_i_] = x;
         const T x2_old = buffer2_[buffer_i_];
@@ -124,26 +121,22 @@ public:
     }
 
     //! Get moving average value.
-    T mov_avg() const
-    {
+    T mov_avg() const {
         const T n = full_ ? T(win_len_) : T(buffer_i_ + 1);
         return movsum_ / n;
     }
 
     //! Get variance.
-    T mov_var() const
-    {
-        const T n = full_ ? T(win_len_) : T(buffer_i_+1);
-        return (T)sqrt((n*movsum2_ - movsum_ * movsum_) / (n * n));
+    T mov_var() const {
+        const T n = full_ ? T(win_len_) : T(buffer_i_ + 1);
+        return (T)sqrt((n * movsum2_ - movsum_ * movsum_) / (n * n));
     }
 
-    T mov_max() const
-    {
+    T mov_max() const {
         return curr_max_;
     }
 
-    T mov_min() const
-    {
+    T mov_min() const {
         return curr_min_;
     }
 
@@ -157,8 +150,7 @@ public:
     //!  [■■■■■■■■■■□□□□□□□□□□□□□□□□□□□□□--------------------]
     //!             ↑         ↑          ↑
     //!                Dropped samples.
-    void extend_win(const size_t new_win)
-    {
+    void extend_win(const size_t new_win) {
         if (new_win <= win_len_) {
             roc_panic("MovStats: the window length can only grow");
         }
@@ -196,66 +188,57 @@ private:
             : buff_(arena)
             , buff_len_(len)
             , begin_(0)
-            , end_(0)
-        {
+            , end_(0) {
             if (!buff_.resize(len)) {
                 roc_panic("Queue: can't allocate storage for the buffer");
             }
         }
 
-        T& front()
-        {
+        T& front() {
             if (is_empty()) {
                 roc_panic("Queue: front() called on empty buffer");
             }
             return buff_[begin_];
         }
 
-        T& back()
-        {
+        T& back() {
             if (is_empty()) {
                 roc_panic("Queue: back() called on empty buffer");
             }
             return buff_[(end_ - 1 + buff_len_) % buff_len_];
         }
 
-        size_t len() const
-        {
+        size_t len() const {
             return (end_ - begin_ + buff_len_) % buff_len_;
         }
 
-        void push_front(const T& x)
-        {
+        void push_front(const T& x) {
             begin_ = (begin_ - 1 + buff_len_) % buff_len_;
             buff_[begin_] = x;
             roc_panic_if_msg(end_ == begin_, "Queue: buffer overflow");
         }
 
-        void pop_front()
-        {
+        void pop_front() {
             if (is_empty()) {
                 roc_panic("Queue: pop_front() called on empty buffer");
             }
             begin_ = (begin_ + 1) % buff_len_;
         }
 
-        void push_back(const T& x)
-        {
+        void push_back(const T& x) {
             buff_[end_] = x;
             end_ = (end_ + 1) % buff_len_;
             roc_panic_if_msg(end_ == begin_, "Queue: buffer overflow");
         }
 
-        void pop_back()
-        {
+        void pop_back() {
             if (is_empty()) {
                 roc_panic("Queue: pop_back() called on empty buffer");
             }
             end_ = (end_ - 1 + buff_len_) % buff_len_;
         }
 
-        bool is_empty()
-        {
+        bool is_empty() {
             return begin_ == end_;
         }
 
@@ -275,4 +258,4 @@ private:
 } // namespace core
 } // namespace roc
 
-#endif // ROC_TOOLKIT_MOV_STATS_H
+#endif // ROC_CORE_MOV_STATS_H_

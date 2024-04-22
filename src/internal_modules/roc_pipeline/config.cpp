@@ -56,8 +56,7 @@ void ReceiverSessionConfig::deduce_defaults() {
 }
 
 ReceiverSourceConfig::ReceiverSourceConfig()
-    : dump_file(NULL)
-{
+    : dump_file(NULL) {
 }
 
 void ReceiverSourceConfig::deduce_defaults() {

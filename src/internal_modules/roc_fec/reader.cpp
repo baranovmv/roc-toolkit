@@ -218,7 +218,8 @@ void Reader::try_repair_() {
         return;
     }
 
-    if (!block_decoder_.begin(source_block_.size(), repair_block_.size(), payload_size_)) {
+    if (!block_decoder_.begin(source_block_.size(), repair_block_.size(),
+                              payload_size_)) {
         roc_log(LogDebug,
                 "fec reader: can't begin decoder block, shutting down:"
                 " sbl=%lu rbl=%lu payload_size=%lu",
@@ -808,7 +809,7 @@ void Reader::update_block_duration_(const packet::PacketPtr& ptr) {
     if (!ptr->rtp()) {
         return;
     }
-    packet::stream_timestamp_diff_t  block_dur = 0;
+    packet::stream_timestamp_diff_t block_dur = 0;
     if (prev_block_timestamp_valid_) {
         block_dur = packet::stream_timestamp_diff(ptr->rtp()->stream_timestamp,
                                                   prev_block_timestamp_);

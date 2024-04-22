@@ -106,9 +106,8 @@ bool LatencyMonitor::reclock(const core::nanoseconds_t playback_timestamp) {
 
 bool LatencyMonitor::pre_process_(const Frame& frame) {
     if (fec_reader_) {
-        latency_metrics_.fec_block_duration = 
-            packet_sample_spec_.stream_timestamp_2_ns(
-                fec_reader_->max_block_duration());
+        latency_metrics_.fec_block_duration =
+            packet_sample_spec_.stream_timestamp_2_ns(fec_reader_->max_block_duration());
     } else {
         latency_metrics_.fec_block_duration = 0;
     }

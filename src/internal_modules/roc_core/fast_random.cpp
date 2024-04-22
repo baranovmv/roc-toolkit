@@ -82,6 +82,5 @@ double fast_random_gaussian() {
 }
 
 
-
 } // namespace core
 } // namespace roc

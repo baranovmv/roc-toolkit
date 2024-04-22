@@ -24,9 +24,9 @@
 #include "roc_core/optional.h"
 #include "roc_core/time.h"
 #include "roc_fec/reader.h"
-#include "roc_rtp/link_meter.h"
 #include "roc_packet/sorted_queue.h"
 #include "roc_packet/units.h"
+#include "roc_rtp/link_meter.h"
 
 namespace roc {
 namespace audio {

@@ -180,8 +180,8 @@ double FreqEstimator::run_controller_(double current) {
                 "Freq Estimator: "
                 " unstable, %0.f > %.0f / %0.f",
                 config_.stable_criteria, error, target_);
-    } else if (abs(error) < target_ * config_.stable_criteria && !stable_ &&
-               core::timestamp(core::ClockMonotonic) - last_unstable_time_
+    } else if (abs(error) < target_ * config_.stable_criteria && !stable_
+               && core::timestamp(core::ClockMonotonic) - last_unstable_time_
                    > 15 * core::Second) {
         stable_ = true;
         roc_log(LogDebug,
@@ -211,7 +211,6 @@ void FreqEstimator::update_target_latency(packet::stream_timestamp_t target_late
 }
 
 bool FreqEstimator::stable() const {
-
     return stable_;
 }
 

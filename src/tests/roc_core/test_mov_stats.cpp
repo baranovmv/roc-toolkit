@@ -8,8 +8,8 @@
 
 #include <CppUTest/TestHarness.h>
 
-#include "roc_core/mov_stats.h"
 #include "roc_core/heap_arena.h"
+#include "roc_core/mov_stats.h"
 
 namespace roc {
 namespace core {
@@ -49,14 +49,14 @@ TEST_GROUP(movstats) {
 TEST(movstats, single_pass) {
     const size_t n = 10;
     MovStats<int64_t> stats(arena, n);
-    const int64_t target_avg = (n-1) * n / 2;
+    const int64_t target_avg = (n - 1) * n / 2;
     int64_t target_var = 0;
     for (size_t i = 0; i < n; i++) {
         const int64_t x = int64_t(i * n);
         stats.add(x);
         target_var += (x - target_avg) * (x - target_avg);
     }
-    target_var = (int64_t) sqrt(target_var / (int64_t)n);
+    target_var = (int64_t)sqrt(target_var / (int64_t)n);
 
     LONGS_EQUAL(target_avg, stats.mov_avg());
     LONGS_EQUAL(target_var, stats.mov_var());
@@ -65,22 +65,22 @@ TEST(movstats, single_pass) {
 TEST(movstats, one_n_half_pass) {
     const size_t n = 10;
     MovStats<int64_t> stats(arena, n);
-    for (size_t i = 0; i < (n * 10 + n/2); i++) {
-        const int64_t x = (int64_t) pow(-1., (double)i);
+    for (size_t i = 0; i < (n * 10 + n / 2); i++) {
+        const int64_t x = (int64_t)pow(-1., (double)i);
         stats.add(x);
     }
 
     LONGS_EQUAL(0, stats.mov_avg());
     LONGS_EQUAL(1, stats.mov_var());
 
-    const int64_t target_avg = (n-1) * n / 2;
+    const int64_t target_avg = (n - 1) * n / 2;
     int64_t target_var = 0;
     for (size_t i = 0; i < n; i++) {
         const int64_t x = int64_t(i * n);
         stats.add(x);
         target_var += (x - target_avg) * (x - target_avg);
     }
-    target_var = (int64_t) sqrt(target_var / (int64_t)n);
+    target_var = (int64_t)sqrt(target_var / (int64_t)n);
 
     LONGS_EQUAL(target_avg, stats.mov_avg());
     LONGS_EQUAL(target_var, stats.mov_var());

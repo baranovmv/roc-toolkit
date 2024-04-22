@@ -89,7 +89,7 @@ ReceiverSlot* ReceiverSource::create_slot(const ReceiverSlotConfig& slot_config)
     core::SharedPtr<ReceiverSlot> slot =
         new (arena_) ReceiverSlot(source_config_, slot_config, state_tracker_, *mixer_,
                                   encoding_map_, packet_factory_, frame_factory_,
-                                  dumper_.get(), arena_);
+                                  dumper_.get(), NULL, arena_);
 
     if (!slot || !slot->is_valid()) {
         roc_log(LogError, "receiver source: can't create slot");

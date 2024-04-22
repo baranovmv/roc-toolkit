@@ -6,9 +6,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+#include "link_meter.h"
 #include "roc_core/panic.h"
 #include "roc_packet/units.h"
-#include "link_meter.h"
 
 namespace roc {
 namespace rtp {
@@ -23,8 +23,9 @@ LinkMeter::LinkMeter(core::IArena& arena,
     , writer_(NULL)
     , sample_spec_(sample_spec)
     , first_packet_jitter_(true)
-    , win_len_(latency_config.tuner_profile == audio::LatencyTunerProfile_Responsive ?
-               10000 : 30000)
+    , win_len_(latency_config.tuner_profile == audio::LatencyTunerProfile_Responsive
+                   ? 10000
+                   : 30000)
     , has_metrics_(false)
     , first_seqnum_(0)
     , last_seqnum_hi_(0)
@@ -60,7 +61,6 @@ void LinkMeter::process_report(const rtcp::SendReport& report) {
     // Currently LinkMeter calculates all link metrics except RTT, and
     // RTT is calculated by RTCP module and passed here.
     metrics_.rtt = report.rtt;
-
 }
 
 status::StatusCode LinkMeter::write(const packet::PacketPtr& packet) {
@@ -102,8 +102,7 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 
     // If packet seqnum is before first seqnum, and there was no wrap yet,
     // update first seqnum.
-    if ((first_packet_jitter_
-        || packet::seqnum_diff(pkt_seqnum, first_seqnum_) < 0)
+    if ((first_packet_jitter_ || packet::seqnum_diff(pkt_seqnum, first_seqnum_) < 0)
         && last_seqnum_hi_ == 0) {
         first_seqnum_ = pkt_seqnum;
     }
@@ -123,11 +122,10 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 
     if (!first_packet_jitter_) {
         // Compute jitter only on consequential packets.
-        const core::nanoseconds_t  d_enq_ns = packet.udp()->enqueue_ts -
-                                                prev_packet_enq_ts_;
-        const packet::stream_timestamp_diff_t d_s_ts =
-            packet::stream_timestamp_diff(packet.rtp()->stream_timestamp,
-                                          prev_stream_timestamp_);
+        const core::nanoseconds_t d_enq_ns =
+            packet.udp()->enqueue_ts - prev_packet_enq_ts_;
+        const packet::stream_timestamp_diff_t d_s_ts = packet::stream_timestamp_diff(
+            packet.rtp()->stream_timestamp, prev_stream_timestamp_);
         const core::nanoseconds_t d_s_ns =
             sample_spec_.stream_timestamp_delta_2_ns(d_s_ts);
 
@@ -157,7 +155,6 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 
     metrics_.ext_first_seqnum = first_seqnum_;
     metrics_.ext_last_seqnum = last_seqnum_hi_ + last_seqnum_lo_;
-    metrics_.total_packets = metrics_.ext_last_seqnum - first_seqnum_ + 1;
     metrics_.lost_packets = (ssize_t)metrics_.total_packets - processed_packets_;
 
     has_metrics_ = true;
