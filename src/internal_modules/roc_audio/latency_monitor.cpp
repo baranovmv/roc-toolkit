@@ -21,6 +21,7 @@ LatencyMonitor::LatencyMonitor(IFrameReader& frame_reader,
                                const packet::SortedQueue& incoming_queue,
                                const Depacketizer& depacketizer,
                                const packet::ILinkMeter& link_meter,
+                               const fec::Reader* fec_reader,
                                ResamplerReader* resampler,
                                const LatencyConfig& config,
                                const SampleSpec& packet_sample_spec,
@@ -30,6 +31,7 @@ LatencyMonitor::LatencyMonitor(IFrameReader& frame_reader,
     , incoming_queue_(incoming_queue)
     , depacketizer_(depacketizer)
     , link_meter_(link_meter)
+    , fec_reader_(fec_reader)
     , resampler_(resampler)
     , enable_scaling_(config.tuner_profile != audio::LatencyTunerProfile_Intact)
     , capture_ts_(0)
@@ -102,6 +104,12 @@ bool LatencyMonitor::reclock(const core::nanoseconds_t playback_timestamp) {
 }
 
 bool LatencyMonitor::pre_process_(const Frame& frame) {
+    if (fec_reader_) {
+        latency_metrics_.fec_block_duration =
+            packet_sample_spec_.stream_timestamp_2_ns(fec_reader_->max_block_duration());
+    } else {
+        latency_metrics_.fec_block_duration = 0;
+    }
     tuner_.write_metrics(latency_metrics_, link_metrics_);
 
     if (!tuner_.update_stream()) {
