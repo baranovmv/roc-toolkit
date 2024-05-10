@@ -157,7 +157,8 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
     , freq_coeff_max_delta_(config.scaling_tolerance)
     , backend_(config.tuner_backend)
     , profile_(config.tuner_profile)
-    , enable_tuning_(config.tuner_profile != audio::LatencyTunerProfile_Intact)
+    , enable_tuning_(config.tuner_profile != audio::LatencyTunerProfile_Intact &&
+                     config.target_latency == 0)
     , enable_bounds_(config.tuner_profile != audio::LatencyTunerProfile_Intact
                      || config.min_latency != 0 || config.max_latency != 0)
     , has_niq_latency_(false)
@@ -181,13 +182,16 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
     , dumper_(dumper) {
     roc_log(LogDebug,
             "latency tuner: initializing:"
-            " target_latency=%ld(%.3fms) min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)"
+            " target_latency=%ld(%.3fms) start_latency=%ld(%.3fms)"
+            " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)"
             " latency_upper_limit_coef=%f"
             " stale_tolerance=%ld(%.3fms)"
             " scaling_interval=%ld(%.3fms) scaling_tolerance=%f"
             " backend=%s profile=%s",
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.target_latency),
             (double)config.target_latency / core::Millisecond,
+            (long)sample_spec_.ns_2_stream_timestamp_delta(config.start_latency),
+            (double)config.start_latency / core::Millisecond,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
             (double)config.min_latency / core::Millisecond,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
@@ -203,19 +207,38 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
     if (config.target_latency < 0) {
         roc_log(LogError,
                 "latency tuner: invalid config:"
-                " target_latency should be set to non-zero value");
+                " target_latency should not be negative");
+        return;
+    }
+
+    if (config.start_latency < 0) {
+        roc_log(LogError,
+                "latency tuner: invalid config:"
+                " start_latency should not be negative");
+        return;
+    }
+
+    if (config.start_latency > 0 && config.target_latency > 0) {
+        roc_log(LogError,
+                "latency tuner: invalid config:"
+                " start_latency and target_latency must not be positive altogether");
         return;
     }
 
     if (enable_bounds_ || enable_tuning_) {
-        target_latency_ = sample_spec_.ns_2_stream_timestamp_delta(config.target_latency);
+        target_latency_ = sample_spec_.ns_2_stream_timestamp_delta(
+                            config.target_latency == 0
+                                ? config.start_latency
+                                : config.target_latency);
 
-        if (config.target_latency <= 0 || target_latency_ <= 0) {
+        if (target_latency_ <= 0) {
             roc_log(LogError,
-                    "latency tuner: invalid config: target_latency is invalid:"
-                    " target_latency=%ld(%.3fms)",
+                    "latency tuner: invalid config: target latency is invalid:"
+                    " start_latency=%ld(%.3fms), target_latency=%ld(%.3fms)",
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.start_latency),
+                    (double)config.start_latency / core::Millisecond,
                     (long)sample_spec_.ns_2_stream_timestamp_delta(config.target_latency),
-                    (double)config.target_latency / core::Millisecond);
+                    (double)config.start_latency / core::Millisecond);
             return;
         }
 
@@ -231,7 +254,7 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
                     "latency tuner: invalid config: target_latency is out of bounds:"
                     " target_latency=%ld(%.3fms)"
                     " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)",
-                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.target_latency),
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(target_latency_),
                     (double)config.target_latency / core::Millisecond,
                     (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
                     (double)config.min_latency / core::Millisecond,

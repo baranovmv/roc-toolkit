@@ -80,7 +80,11 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
     pkt_reader = filter_.get();
 
     delayed_reader_.reset(new (delayed_reader_) packet::DelayedReader(
-        *pkt_reader, session_config.latency.target_latency, pkt_encoding->sample_spec));
+        *pkt_reader,
+        session_config.latency.target_latency != 0
+            ? session_config.latency.target_latency
+            : session_config.latency.start_latency,
+        pkt_encoding->sample_spec));
     if (!delayed_reader_ || !delayed_reader_->is_valid()) {
         return;
     }

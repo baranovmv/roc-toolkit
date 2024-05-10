@@ -81,6 +81,13 @@ struct LatencyConfig {
     //!  Negative value is an error.
     core::nanoseconds_t target_latency;
 
+    //! Start latency.
+    //! @remarks
+    //!  In case of dynamic latency the tuner will start from this value.
+    //! @note
+    //!  This value makes sense only when target_latency is set to 0.
+    core::nanoseconds_t start_latency;
+
     //! Minimum allowed latency.
     //! @remarks
     //!  If the latency goes out of bounds, the session is terminated.

@@ -110,8 +110,21 @@ int main(int argc, char** argv) {
             roc_log(LogError, "invalid --target-latency: bad format");
             return 1;
         }
-        if (receiver_config.session_defaults.latency.target_latency <= 0) {
+        if (receiver_config.session_defaults.latency.target_latency < 0) {
             roc_log(LogError, "invalid --target-latency: should be > 0");
+            return 1;
+        }
+    }
+
+    if (args.start_latency_given) {
+        if (!core::parse_duration(
+                args.start_latency_arg,
+                receiver_config.session_defaults.latency.start_latency)) {
+            roc_log(LogError, "invalid --start-latency: bad format");
+            return 1;
+        }
+        if (receiver_config.session_defaults.latency.start_latency < 0) {
+            roc_log(LogError, "invalid --start-latency: should be >= 0");
             return 1;
         }
     }

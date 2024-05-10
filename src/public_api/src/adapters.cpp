@@ -173,6 +173,18 @@ bool receiver_config_from_user(node::Context&,
             (core::nanoseconds_t)in.target_latency;
     }
 
+    if (in.start_latency != 0) {
+        if (in.target_latency != 0) {
+            roc_log (LogError,
+                    "bad configuration:"
+                    " start latency must be 0 if latency tuning is disabled"
+                    " (target_latency != 0)");
+            return false;
+        }
+        out.session_defaults.latency.start_latency =
+            (core::nanoseconds_t)in.start_latency;
+    }
+
     if (in.min_latency != 0) {
         out.session_defaults.latency.min_latency = (core::nanoseconds_t)in.min_latency;
     }
