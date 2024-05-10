@@ -387,5 +387,33 @@ TEST(link_meter, losses_test) {
     }
 }
 
+IGNORE_TEST(link_meter, total_counter) {
+    packet::Queue queue;
+    audio::LatencyConfig latency_config;
+    latency_config.tuner_profile = audio::LatencyTunerProfile_Responsive;
+    LinkMeter meter(arena, encoding_map, sample_spec, latency_config, NULL);
+    meter.set_writer(queue);
+    core::nanoseconds_t ts = start_ts;
+    packet::stream_timestamp_t sts = stream_start_ts;
+    uint16_t seqnum = 65500;
+    uint32_t total_counter = 0;
+
+    UNSIGNED_LONGS_EQUAL(0, meter.metrics().ext_last_seqnum);
+
+    for (size_t i = 0; i < 66000; i++) {
+        LONGS_EQUAL(status::StatusOK,
+                    meter.write(new_packet(uint16_t((seqnum + total_counter) & 0xFFFF),
+                                           ts + step_ts * total_counter,
+                                           sts + step_ts * total_counter)));
+        UNSIGNED_LONGS_EQUAL(uint32_t(seqnum) + total_counter,
+                             meter.metrics().ext_last_seqnum);
+        UNSIGNED_LONGS_EQUAL(total_counter + 1, meter.metrics().total_packets);
+
+        UNSIGNED_LONGS_EQUAL(i + 1, queue.size());
+
+        total_counter += 1;
+    }
+}
+
 } // namespace rtp
 } // namespace roc

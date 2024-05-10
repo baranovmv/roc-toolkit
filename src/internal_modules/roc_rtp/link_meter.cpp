@@ -155,6 +155,7 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
 
     metrics_.ext_first_seqnum = first_seqnum_;
     metrics_.ext_last_seqnum = last_seqnum_hi_ + last_seqnum_lo_;
+    metrics_.total_packets = metrics_.ext_last_seqnum - first_seqnum_ + 1;
     metrics_.lost_packets = (ssize_t)metrics_.total_packets - processed_packets_;
 
     has_metrics_ = true;

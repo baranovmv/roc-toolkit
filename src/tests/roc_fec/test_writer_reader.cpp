@@ -391,6 +391,69 @@ TEST(writer_reader, lost_first_packet_in_first_block) {
         UNSIGNED_LONGS_EQUAL(0, dispatcher.source_size());
     }
 }
+IGNORE_TEST(writer_reader, lost_first_packet_in_two_blocks) {
+    for (size_t n_scheme = 0; n_scheme < CodecMap::instance().num_schemes(); n_scheme++) {
+        codec_config.scheme = CodecMap::instance().nth_scheme(n_scheme);
+
+        core::ScopedPtr<IBlockEncoder> encoder(
+            CodecMap::instance().new_encoder(codec_config, buffer_factory, arena), arena);
+
+        core::ScopedPtr<IBlockDecoder> decoder(
+            CodecMap::instance().new_decoder(codec_config, buffer_factory, arena), arena);
+
+        CHECK(encoder);
+        CHECK(decoder);
+
+        test::PacketDispatcher dispatcher(source_parser(), repair_parser(),
+                                          packet_factory, NumSourcePackets,
+                                          NumRepairPackets);
+
+        Writer writer(writer_config, codec_config.scheme, *encoder, dispatcher,
+                      source_composer(), repair_composer(), packet_factory,
+                      buffer_factory, arena);
+
+        Reader reader(reader_config, codec_config.scheme, *decoder,
+                      dispatcher.source_reader(), dispatcher.repair_reader(), rtp_parser,
+                      packet_factory, arena);
+
+        CHECK(writer.is_valid());
+        CHECK(reader.is_valid());
+
+        // Sending first block except first packet.
+        fill_all_packets(0);
+        dispatcher.lose(0);
+        CHECK(writer.max_block_duration() == 0);
+        for (size_t i = 0; i < NumSourcePackets; ++i) {
+            UNSIGNED_LONGS_EQUAL(status::StatusOK, writer.write(source_packets[i]));
+        }
+
+        // Sending second block except the first packet in it.
+        dispatcher.clear_losses();
+        fill_all_packets(NumSourcePackets);
+        dispatcher.lose(0);
+        for (size_t i = 0; i < NumSourcePackets; ++i) {
+            UNSIGNED_LONGS_EQUAL(status::StatusOK, writer.write(source_packets[i]));
+        }
+        dispatcher.push_stocks();
+
+        for (size_t i = 1; i < NumSourcePackets * 2; ++i) {
+            packet::PacketPtr p;
+            UNSIGNED_LONGS_EQUAL(status::StatusOK, reader.read(p));
+            if (i < NumSourcePackets) {
+                CHECK(!reader.is_started());
+                CHECK(reader.max_block_duration() == 0);
+            } else {
+                CHECK(reader.is_started());
+                // The first packet of the previous block was lost -- still unable to
+                // get the difference in ts.
+                CHECK(reader.max_block_duration() == 0);
+            }
+            check_audio_packet(p, i);
+            check_restored(p, false);
+        }
+        UNSIGNED_LONGS_EQUAL(0, dispatcher.source_size());
+    }
+}
 
 TEST(writer_reader, lost_one_source_and_all_repair_packets) {
     for (size_t n_scheme = 0; n_scheme < CodecMap::instance().num_schemes(); n_scheme++) {
