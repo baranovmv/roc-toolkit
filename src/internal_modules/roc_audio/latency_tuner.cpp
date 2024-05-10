@@ -184,10 +184,7 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
             "latency tuner: initializing:"
             " target_latency=%ld(%.3fms) start_latency=%ld(%.3fms)"
             " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)"
-            " latency_upper_limit_coef=%f"
-            " stale_tolerance=%ld(%.3fms)"
-            " scaling_interval=%ld(%.3fms) scaling_tolerance=%f"
-            " backend=%s profile=%s",
+            " latency_upper_limit_coef=%f",
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.target_latency),
             (double)config.target_latency / core::Millisecond,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.start_latency),
@@ -196,13 +193,20 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
             (double)config.min_latency / core::Millisecond,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
             (double)config.max_latency / core::Millisecond,
-            (double)config.upper_threshold_coef,
+            (double)config.upper_threshold_coef);
+
+    roc_log(LogDebug,
+            "latency tuner: initializing:"
+            " stale_tolerance=%ld(%.3fms)"
+            " scaling_interval=%ld(%.3fms) scaling_tolerance=%f"
+            " backend=%s profile=%s tuning=%s",
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.stale_tolerance),
             (double)config.stale_tolerance / core::Millisecond,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.scaling_interval),
             (double)config.scaling_interval / core::Millisecond,
             (double)config.scaling_tolerance, latency_tuner_backend_to_str(backend_),
-            latency_tuner_profile_to_str(profile_));
+            latency_tuner_profile_to_str(profile_),
+            enable_tuning_ ? "enabled" : "disabled");
 
     if (config.target_latency < 0) {
         roc_log(LogError,
