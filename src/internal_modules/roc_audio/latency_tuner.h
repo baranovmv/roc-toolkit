@@ -137,6 +137,7 @@ struct LatencyConfig {
         : tuner_backend(LatencyTunerBackend_Default)
         , tuner_profile(LatencyTunerProfile_Default)
         , target_latency(0)
+        , start_latency(0)
         , min_latency(0)
         , max_latency(0)
         , stale_tolerance(0)
