@@ -152,8 +152,8 @@ TEST_GROUP(receiver_source) {
 
         config.session_defaults.latency.tuner_backend = audio::LatencyTunerBackend_Niq;
         config.session_defaults.latency.tuner_profile = audio::LatencyTunerProfile_Intact;
-        config.session_defaults.latency.target_latency = 0;
-        config.session_defaults.latency.start_latency =
+        config.session_defaults.latency.start_latency = 0;
+        config.session_defaults.latency.target_latency =
             target_latency * core::Second / (int)output_sample_spec.sample_rate();
         config.session_defaults.latency.min_latency =
             min_latency * core::Second / (int)output_sample_spec.sample_rate();

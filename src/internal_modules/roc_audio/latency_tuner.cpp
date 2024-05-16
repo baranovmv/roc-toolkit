@@ -236,7 +236,8 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
                         enable_tuning_
                             ? config.start_latency
                             : config.target_latency);
-    if (target_latency_ <= 0) {
+    if (config.tuner_profile != audio::LatencyTunerProfile_Intact
+        && target_latency_ <= 0) {
         roc_log(LogError,
                 "latency tuner: invalid config: target latency is invalid:"
                 " start_latency=%ld(%.3fms), target_latency=%ld(%.3fms)",
@@ -244,21 +245,6 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
                 (double)config.start_latency / core::Millisecond,
                 (long)sample_spec_.ns_2_stream_timestamp_delta(config.target_latency),
                 (double)config.start_latency / core::Millisecond);
-        return;
-    }
-
-    if (target_latency_ < min_latency_ || target_latency_ > max_latency_) {
-        roc_log(
-            LogError,
-            "latency tuner: invalid config: target_latency is out of bounds:"
-            " target_latency=%ld(%.3fms)"
-            " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)",
-            (long)sample_spec_.ns_2_stream_timestamp_delta(target_latency_),
-            (double)config.target_latency / core::Millisecond,
-            (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
-            (double)config.min_latency / core::Millisecond,
-            (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
-            (double)config.max_latency / core::Millisecond);
         return;
     }
 
@@ -287,6 +273,22 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
                 (double)config.min_latency / core::Millisecond,
                 (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
                 (double)config.max_latency / core::Millisecond);
+        }
+
+
+        if (target_latency_ < min_latency_ || target_latency_ > max_latency_) {
+            roc_log(
+                LogError,
+                "latency tuner: invalid config: target_latency is out of bounds:"
+                " target_latency=%ld(%.3fms)"
+                " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)",
+                (long)sample_spec_.ns_2_stream_timestamp_delta(target_latency_),
+                (double)config.target_latency / core::Millisecond,
+                (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
+                (double)config.min_latency / core::Millisecond,
+                (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
+                (double)config.max_latency / core::Millisecond);
+            return;
         }
     }
 
