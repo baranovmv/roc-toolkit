@@ -90,7 +90,7 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
             if (auto_tune_latency) {
                 // Out formula doesn't work well on latencies close to zero.
                 const core::nanoseconds_t floored_target_latency =
-                    std::max(target_latency, core::Millisecond);
+                    std::max(std::max(start_latency, target_latency), core::Millisecond);
 
                 // On sender, apply multiplier to make default tolerance a bit higher than
                 // on receiver. This way, if bounding is enabled on both sides, receiver
@@ -110,11 +110,12 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
                     * (std::log((200 * core::Millisecond) * 2 * multiplier)
                        / std::log(floored_target_latency * 2)));
 
-                min_latency = target_latency - latency_tolerance;
-                max_latency = target_latency + latency_tolerance;
+                min_latency = floored_target_latency - latency_tolerance;
+                max_latency = floored_target_latency + latency_tolerance;
 
                 if (upper_threshold_coef == 0.f) {
-                    upper_threshold_coef = (float)max_latency / (float)target_latency;
+                    upper_threshold_coef = (float)max_latency
+                        / (float)floored_target_latency;
                 }
             } else {
                 // Auto tune is enabled, set some sensible hard limits to the target latency:
