@@ -24,14 +24,13 @@ namespace rtp {
 
 namespace {
 
-enum { PacketSz = 100 };
+enum { ChMask = 3, PacketSz = 100, SampleRate = 10000, Duration = 100 };
 
 core::HeapArena arena;
 packet::PacketFactory packet_factory(arena, PacketSz);
 
 EncodingMap encoding_map(arena);
 
-enum { ChMask = 3, PacketSz = 128, SampleRate = 10000, Duration = 100 };
 audio::SampleSpec sample_spec(SampleRate,
                               audio::Sample_RawFormat,
                               audio::ChanLayout_Surround,

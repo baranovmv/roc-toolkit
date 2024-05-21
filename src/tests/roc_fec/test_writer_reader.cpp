@@ -391,15 +391,16 @@ TEST(writer_reader, lost_first_packet_in_first_block) {
         UNSIGNED_LONGS_EQUAL(0, dispatcher.source_size());
     }
 }
+
 IGNORE_TEST(writer_reader, lost_first_packet_in_two_blocks) {
     for (size_t n_scheme = 0; n_scheme < CodecMap::instance().num_schemes(); n_scheme++) {
         codec_config.scheme = CodecMap::instance().nth_scheme(n_scheme);
 
         core::ScopedPtr<IBlockEncoder> encoder(
-            CodecMap::instance().new_encoder(codec_config, buffer_factory, arena), arena);
+            CodecMap::instance().new_encoder(codec_config, packet_factory, arena), arena);
 
         core::ScopedPtr<IBlockDecoder> decoder(
-            CodecMap::instance().new_decoder(codec_config, buffer_factory, arena), arena);
+            CodecMap::instance().new_decoder(codec_config, packet_factory, arena), arena);
 
         CHECK(encoder);
         CHECK(decoder);
@@ -410,7 +411,7 @@ IGNORE_TEST(writer_reader, lost_first_packet_in_two_blocks) {
 
         Writer writer(writer_config, codec_config.scheme, *encoder, dispatcher,
                       source_composer(), repair_composer(), packet_factory,
-                      buffer_factory, arena);
+                      arena);
 
         Reader reader(reader_config, codec_config.scheme, *decoder,
                       dispatcher.source_reader(), dispatcher.repair_reader(), rtp_parser,
