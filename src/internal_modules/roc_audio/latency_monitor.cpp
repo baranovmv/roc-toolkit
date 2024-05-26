@@ -73,7 +73,7 @@ bool LatencyMonitor::read(Frame& frame) {
 
     if (alive_) {
         compute_niq_latency_();
-        query_link_meter_();
+        query_metrics_();
 
         if (!pre_process_(frame)) {
             alive_ = false;
@@ -104,14 +104,7 @@ bool LatencyMonitor::reclock(const core::nanoseconds_t playback_timestamp) {
 }
 
 bool LatencyMonitor::pre_process_(const Frame& frame) {
-    if (fec_reader_) {
-        latency_metrics_.fec_block_duration =
-            packet_sample_spec_.stream_timestamp_2_ns(fec_reader_->max_block_duration());
-    } else {
-        latency_metrics_.fec_block_duration = 0;
-    }
     tuner_.write_metrics(latency_metrics_, link_metrics_);
-
     if (!tuner_.update_stream()) {
         // TODO(gh-183): forward status code
         return false;
@@ -185,12 +178,19 @@ void LatencyMonitor::compute_e2e_latency_(const core::nanoseconds_t playback_tim
     latency_metrics_.e2e_latency = playback_timestamp - capture_ts_;
 }
 
-void LatencyMonitor::query_link_meter_() {
+void LatencyMonitor::query_metrics_() {
     if (!link_meter_.has_metrics()) {
         return;
     }
 
     link_metrics_ = link_meter_.metrics();
+
+    if (fec_reader_) {
+        latency_metrics_.fec_block_duration =
+            packet_sample_spec_.stream_timestamp_2_ns(fec_reader_->max_block_duration());
+    } else {
+        latency_metrics_.fec_block_duration = 0;
+    }
 }
 
 bool LatencyMonitor::init_scaling_() {

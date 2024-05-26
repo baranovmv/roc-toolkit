@@ -95,7 +95,7 @@ public:
 private:
     void compute_niq_latency_();
     void compute_e2e_latency_(core::nanoseconds_t playback_timestamp);
-    void query_link_meter_();
+    void query_metrics_();
 
     bool pre_process_(const Frame& frame);
     void post_process_(const Frame& frame);

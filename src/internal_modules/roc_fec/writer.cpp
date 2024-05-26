@@ -112,7 +112,6 @@ status::StatusCode Writer::write(const packet::PacketPtr& pp) {
     }
 
     if (cur_packet_ == 0) {
-        update_block_duration_(pp);
         if (!begin_block_(pp)) {
             // TODO(gh-183): return status
             return status::StatusOK;
@@ -139,6 +138,8 @@ status::StatusCode Writer::write(const packet::PacketPtr& pp) {
 }
 
 bool Writer::begin_block_(const packet::PacketPtr& pp) {
+    update_block_duration_(pp);
+
     if (!apply_sizes_(next_sblen_, next_rblen_, pp->fec()->payload.size())) {
         return false;
     }
@@ -347,19 +348,16 @@ bool Writer::validate_source_packet_(const packet::PacketPtr& pp) {
 }
 
 void Writer::update_block_duration_(const packet::PacketPtr& ptr) {
-    if (!ptr->rtp()) {
-        return;
-    }
     packet::stream_timestamp_diff_t block_dur = 0;
     if (prev_block_timestamp_valid_) {
-        block_dur = packet::stream_timestamp_diff(ptr->rtp()->stream_timestamp,
-                                                  prev_block_timestamp_);
+        block_dur =
+            packet::stream_timestamp_diff(ptr->stream_timestamp(), prev_block_timestamp_);
     }
     if (block_dur < 0) {
         prev_block_timestamp_valid_ = false;
     } else {
         block_max_duration_ = std::max(block_max_duration_, block_dur);
-        prev_block_timestamp_ = ptr->rtp()->stream_timestamp;
+        prev_block_timestamp_ = ptr->stream_timestamp();
         prev_block_timestamp_valid_ = true;
     }
 }

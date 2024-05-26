@@ -141,13 +141,6 @@ status::StatusCode Reader::get_next_packet_(packet::PacketPtr& ptr) {
     fill_block_();
 
     packet::PacketPtr pp = source_block_[next_packet_];
-    if (next_packet_ == 0) {
-        if (pp) {
-            update_block_duration_(pp);
-        } else {
-            prev_block_timestamp_valid_ = false;
-        }
-    }
 
     do {
         if (!alive_) {
@@ -188,6 +181,12 @@ status::StatusCode Reader::get_next_packet_(packet::PacketPtr& ptr) {
 
 void Reader::next_block_() {
     roc_log(LogTrace, "fec reader: next block: sbn=%lu", (unsigned long)cur_sbn_);
+
+    if (source_block_[0]) {
+        update_block_duration_(source_block_[0]);
+    } else {
+        prev_block_timestamp_valid_ = false;
+    }
 
     for (size_t n = 0; n < source_block_.size(); n++) {
         source_block_[n] = NULL;
@@ -804,18 +803,19 @@ void Reader::drop_repair_packets_from_prev_blocks_() {
 }
 
 void Reader::update_block_duration_(const packet::PacketPtr& ptr) {
-    if (!ptr->rtp()) {
-        return;
-    }
     packet::stream_timestamp_diff_t block_dur = 0;
     if (prev_block_timestamp_valid_) {
-        block_dur = packet::stream_timestamp_diff(ptr->rtp()->stream_timestamp,
-                                                  prev_block_timestamp_);
+        block_dur =
+            packet::stream_timestamp_diff(ptr->stream_timestamp(), prev_block_timestamp_);
     }
-    roc_panic_if_msg(block_dur < 0, "fec reader: negative block duration");
-    block_max_duration_ = std::max(block_max_duration_, block_dur);
-    prev_block_timestamp_ = ptr->rtp()->stream_timestamp;
-    prev_block_timestamp_valid_ = true;
+    if (block_dur < 0) {
+        roc_log(LogTrace, "fec reader: negative block duration");
+        prev_block_timestamp_valid_ = false;
+    } else {
+        block_max_duration_ = std::max(block_max_duration_, block_dur);
+        prev_block_timestamp_ = ptr->stream_timestamp();
+        prev_block_timestamp_valid_ = true;
+    }
 }
 
 packet::stream_timestamp_t Reader::max_block_duration() const {
