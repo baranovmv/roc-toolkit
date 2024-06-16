@@ -14,6 +14,7 @@
 
 #include "roc_audio/freq_estimator.h"
 #include "roc_audio/sample_spec.h"
+#include "roc_core/csv_dumper.h"
 #include "roc_core/noncopyable.h"
 #include "roc_core/optional.h"
 #include "roc_core/time.h"
@@ -80,13 +81,26 @@ struct LatencyConfig {
     //!  Negative value is an error.
     core::nanoseconds_t target_latency;
 
-    //! Maximum allowed deviation from target latency.
+    //! Start latency.
+    //! @remarks
+    //!  In case of dynamic latency the tuner will start from this value.
+    //! @note
+    //!  This value makes sense only when target_latency is set to 0.
+    core::nanoseconds_t start_latency;
+
+    //! Minimum allowed latency.
     //! @remarks
     //!  If the latency goes out of bounds, the session is terminated.
     //! @note
-    //!  If zero, default value is used if possible.
-    //!  Negative value is an error.
-    core::nanoseconds_t latency_tolerance;
+    //!  If both min_latency and max_latency are zero, defaults are used.
+    core::nanoseconds_t min_latency;
+
+    //! Maximum allowed latency.
+    //! @remarks
+    //!  If the latency goes out of bounds, the session is terminated.
+    //! @note
+    //!  If both min_latency and max_latency are zero, defaults are used.
+    core::nanoseconds_t max_latency;
 
     //! Maximum delay since last packet before queue is considered stalling.
     //! @remarks
@@ -114,15 +128,22 @@ struct LatencyConfig {
     //!  Negative value is an error.
     float scaling_tolerance;
 
+    //! Latency tuner decides to adjust target latency if
+    //! the current value >= estimated optimal latency * upper_threshold_coef.
+    float upper_threshold_coef;
+
     //! Initialize.
     LatencyConfig()
         : tuner_backend(LatencyTunerBackend_Default)
         , tuner_profile(LatencyTunerProfile_Default)
         , target_latency(0)
-        , latency_tolerance(0)
+        , start_latency(0)
+        , min_latency(0)
+        , max_latency(0)
         , stale_tolerance(0)
         , scaling_interval(0)
-        , scaling_tolerance(0) {
+        , scaling_tolerance(0)
+        , upper_threshold_coef(1.7f) {
     }
 
     //! Automatically fill missing settings.
@@ -171,7 +192,9 @@ struct LatencyMetrics {
 class LatencyTuner : public core::NonCopyable<> {
 public:
     //! Initialize.
-    LatencyTuner(const LatencyConfig& config, const SampleSpec& sample_spec);
+    LatencyTuner(const LatencyConfig& config,
+                 const SampleSpec& sample_spec,
+                 core::CsvDumper* dumper);
 
     //! Check if the object was initialized successfully.
     bool is_valid() const;
@@ -207,6 +230,10 @@ private:
     bool check_bounds_(packet::stream_timestamp_diff_t latency);
     void compute_scaling_(packet::stream_timestamp_diff_t latency);
     void report_();
+    // Decides if the latency should be adjusted and orders fe_ to do so if needed.
+    void update_target_latency_(core::nanoseconds_t max_jitter_ns,
+                                core::nanoseconds_t mean_jitter_ns,
+                                core::nanoseconds_t fec_block_ns);
 
     core::Optional<FreqEstimator> fe_;
 
@@ -235,8 +262,9 @@ private:
     bool has_e2e_latency_;
     packet::stream_timestamp_diff_t e2e_latency_;
 
-    bool has_jitter_;
-    packet::stream_timestamp_diff_t jitter_;
+    bool has_metrics_;
+    LatencyMetrics latency_metrics_;
+    packet::LinkMetrics link_metrics_;
 
     packet::stream_timestamp_diff_t target_latency_;
     packet::stream_timestamp_diff_t min_latency_;
@@ -246,6 +274,23 @@ private:
     const SampleSpec sample_spec_;
 
     bool valid_;
+
+    enum TargetLatencyState {
+        TL_NONE,
+        TL_START,
+        TL_INC_TIMEOUT,
+        TL_DEC_TIMEOUT
+    } target_latency_state_;
+    core::nanoseconds_t last_target_latency_update_;
+    const float lat_update_upper_thrsh_;
+    float upper_coef_to_step_lat_update_(float upper_threshold_coef);
+    float lower_thrs_to_step_lat_update_(float upper_threshold_coef);
+    const float lat_update_dec_step_;
+    const float lat_update_inc_step_;
+
+    core::nanoseconds_t last_lat_limit_log_;
+
+    core::CsvDumper* dumper_;
 };
 
 //! Get string name of latency backend.

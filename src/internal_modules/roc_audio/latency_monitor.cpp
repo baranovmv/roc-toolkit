@@ -25,8 +25,9 @@ LatencyMonitor::LatencyMonitor(IFrameReader& frame_reader,
                                ResamplerReader* resampler,
                                const LatencyConfig& config,
                                const SampleSpec& packet_sample_spec,
-                               const SampleSpec& frame_sample_spec)
-    : tuner_(config, frame_sample_spec)
+                               const SampleSpec& frame_sample_spec,
+                               core::CsvDumper* dumper)
+    : tuner_(config, frame_sample_spec, dumper)
     , frame_reader_(frame_reader)
     , incoming_queue_(incoming_queue)
     , depacketizer_(depacketizer)
@@ -104,6 +105,12 @@ bool LatencyMonitor::reclock(const core::nanoseconds_t playback_timestamp) {
 }
 
 bool LatencyMonitor::pre_process_(const Frame& frame) {
+    if (fec_reader_) {
+        latency_metrics_.fec_block_duration =
+            packet_sample_spec_.stream_timestamp_2_ns(fec_reader_->max_block_duration());
+    } else {
+        latency_metrics_.fec_block_duration = 0;
+    }
     tuner_.write_metrics(latency_metrics_, link_metrics_);
     if (!tuner_.update_stream()) {
         // TODO(gh-183): forward status code
