@@ -53,7 +53,7 @@ packet::PacketPtr new_packet(packet::seqnum_t sn,
     packet->rtp()->seqnum = sn;
     packet->rtp()->duration = Duration;
     packet->rtp()->stream_timestamp = stream_ts;
-    packet->udp()->enqueue_ts = ts;
+    packet->udp()->queue_timestamp = ts;
 
     return packet;
 }

@@ -67,14 +67,17 @@ ReceiverSource::ReceiverSource(const ReceiverSourceConfig& source_config,
         return;
     }
 
-    frame_reader_ = frm_reader;
-    valid_ = true;
 
     if (source_config.dump_file) {
         dumper_.reset(new (dumper_) core::CsvDumper(source_config.dump_file,
                                                     dumper_config_, arena));
-        dumper_->start();
+        if (!dumper_->start()) {
+            return;
+        }
     }
+
+    frame_reader_ = frm_reader;
+    valid_ = true;
 }
 
 bool ReceiverSource::is_valid() const {

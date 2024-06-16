@@ -123,7 +123,7 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
     if (!first_packet_jitter_) {
         // Compute jitter only on consequential packets.
         const core::nanoseconds_t d_enq_ns =
-            packet.udp()->enqueue_ts - prev_packet_enq_ts_;
+            packet.udp()->queue_timestamp - prev_packet_enq_ts_;
         const packet::stream_timestamp_diff_t d_s_ts = packet::stream_timestamp_diff(
             packet.rtp()->stream_timestamp, prev_stream_timestamp_);
         const core::nanoseconds_t d_s_ns =
@@ -138,7 +138,7 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
             core::CsvEntry e;
             e.type = 'm';
             e.n_fields = 5;
-            e.fields[0] = packet.udp()->enqueue_ts;
+            e.fields[0] = packet.udp()->queue_timestamp;
             e.fields[1] = packet.rtp()->stream_timestamp;
             e.fields[2] = (double)std::abs(d_enq_ns - d_s_ns) / core::Millisecond;
             e.fields[3] = packet_jitter_stats_.mov_max();
@@ -149,7 +149,7 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
         first_packet_jitter_ = false;
     }
 
-    prev_packet_enq_ts_ = packet.udp()->enqueue_ts;
+    prev_packet_enq_ts_ = packet.udp()->queue_timestamp;
     prev_stream_timestamp_ = packet.rtp()->stream_timestamp;
     processed_packets_++;
 

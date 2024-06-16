@@ -35,7 +35,6 @@ ReceiverSlot::ReceiverSlot(const ReceiverSourceConfig& source_config,
                      frame_factory,
                      dumper,
                      arena)
-    , dumper_(dumper)
     , valid_(false) {
     if (!session_group_.is_valid()) {
         return;

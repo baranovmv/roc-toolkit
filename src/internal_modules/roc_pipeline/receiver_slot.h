@@ -98,8 +98,6 @@ private:
     core::Optional<ReceiverEndpoint> repair_endpoint_;
     core::Optional<ReceiverEndpoint> control_endpoint_;
 
-    core::CsvDumper* dumper_;
-
     bool valid_;
 };
 
