@@ -32,13 +32,19 @@ section "Options"
     option "target-latency" - "Target latency, TIME units"
         string optional
 
+    option "latency-tolerance" - "Maximum deviation from target latency, TIME units"
+        string optional
+
     option "start-latency" - "Start latency, target-latency must be 0 or unset, TIME units"
         string optional
 
-    option "io-latency" - "Playback target latency, TIME units"
+    option "min-latency" - "Minimum allowed latency, target-latency and latency-tolerance must be 0 or unset, TIME units"
         string optional
 
-    option "latency-tolerance" - "Maximum deviation from target latency, TIME units"
+    option "max-latency" - "Maximum allowed latency, target-latency and latency-tolerance must be 0 or unset, TIME units"
+        string optional
+
+    option "io-latency" - "Playback target latency, TIME units"
         string optional
 
     option "no-play-timeout" - "No playback timeout, TIME units"

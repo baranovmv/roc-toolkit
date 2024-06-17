@@ -116,6 +116,19 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (args.latency_tolerance_given) {
+        if (!core::parse_duration(
+                args.latency_tolerance_arg,
+                receiver_config.session_defaults.latency.latency_tolerance)) {
+            roc_log(LogError, "invalid --latency-tolerance: bad format");
+            return 1;
+        }
+        if (receiver_config.session_defaults.latency.latency_tolerance < 0) {
+            roc_log(LogError, "invalid --latency-tolerance: should be > 0");
+            return 1;
+        }
+    }
+
     if (args.start_latency_given) {
         if (!core::parse_duration(
                 args.start_latency_arg,

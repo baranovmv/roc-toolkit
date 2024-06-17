@@ -81,6 +81,9 @@ struct LatencyConfig {
     //!  Negative value is an error.
     core::nanoseconds_t target_latency;
 
+    //! Latency tolerance.
+    core::nanoseconds_t latency_tolerance;
+
     //! Start latency.
     //! @remarks
     //!  In case of dynamic latency the tuner will start from this value.

@@ -163,9 +163,9 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
     , backend_(config.tuner_backend)
     , profile_(config.tuner_profile)
     , enable_tuning_(config.tuner_profile != audio::LatencyTunerProfile_Intact &&
-                     config.target_latency == 0)
+                     config.start_latency != 0)
     , enable_bounds_((config.tuner_profile != audio::LatencyTunerProfile_Intact && !enable_tuning_)
-                     || config.min_latency != 0 || config.max_latency != 0)
+                     || config.min_latency != 0 || config.max_latency != 0 || config.latency_tolerance != 0)
     , has_niq_latency_(false)
     , niq_latency_(0)
     , niq_stalling_(0)
