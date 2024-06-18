@@ -81,7 +81,12 @@ struct LatencyConfig {
     //!  Negative value is an error.
     core::nanoseconds_t target_latency;
 
-    //! Latency tolerance.
+    //! Maximum allowed deviation from target latency.
+    //! @remarks
+    //!  If the latency goes out of bounds, the session is terminated.
+    //! @note
+    //!  If zero, default value is used if possible.
+    //!  Negative value is an error.
     core::nanoseconds_t latency_tolerance;
 
     //! Start latency.
@@ -140,6 +145,7 @@ struct LatencyConfig {
         : tuner_backend(LatencyTunerBackend_Default)
         , tuner_profile(LatencyTunerProfile_Default)
         , target_latency(0)
+        , latency_tolerance(0)
         , start_latency(0)
         , min_latency(0)
         , max_latency(0)
@@ -269,6 +275,7 @@ private:
     LatencyMetrics latency_metrics_;
     packet::LinkMetrics link_metrics_;
 
+    bool auto_tune_;
     packet::stream_timestamp_diff_t target_latency_;
     packet::stream_timestamp_diff_t min_latency_;
     packet::stream_timestamp_diff_t max_latency_;

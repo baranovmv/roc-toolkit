@@ -43,8 +43,8 @@ TEST(receiver_endpoint, valid) {
     ReceiverSourceConfig source_config;
     ReceiverSlotConfig slot_config;
     ReceiverSessionGroup session_group(source_config, slot_config, state_tracker, mixer,
-                                       encoding_map, packet_factory, frame_factory,
-                                       NULL, arena);
+                                       encoding_map, packet_factory, frame_factory, NULL,
+                                       arena);
 
     ReceiverEndpoint endpoint(address::Proto_RTP, state_tracker, session_group,
                               encoding_map, address::SocketAddr(), NULL, arena);
@@ -58,8 +58,8 @@ TEST(receiver_endpoint, invalid_proto) {
     ReceiverSourceConfig source_config;
     ReceiverSlotConfig slot_config;
     ReceiverSessionGroup session_group(source_config, slot_config, state_tracker, mixer,
-                                       encoding_map, packet_factory, frame_factory,
-                                       NULL, arena);
+                                       encoding_map, packet_factory, frame_factory, NULL,
+                                       arena);
 
     ReceiverEndpoint endpoint(address::Proto_None, state_tracker, session_group,
                               encoding_map, address::SocketAddr(), NULL, arena);

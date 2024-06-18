@@ -111,8 +111,8 @@ void LinkMeter::update_jitter_(const packet::Packet& packet) {
         last_seqnum_hi_ = 0;
         last_seqnum_lo_ = pkt_seqnum;
 
-    // If packet seqnum is after last seqnum, update last seqnum, and
-    // also counts possible wraps.
+        // If packet seqnum is after last seqnum, update last seqnum, and
+        // also counts possible wraps.
     } else if (packet::seqnum_diff(pkt_seqnum, last_seqnum_lo_) > 0) {
         if (pkt_seqnum < last_seqnum_lo_) {
             last_seqnum_hi_ += 1 << 16;

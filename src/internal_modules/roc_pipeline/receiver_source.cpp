@@ -67,7 +67,6 @@ ReceiverSource::ReceiverSource(const ReceiverSourceConfig& source_config,
         return;
     }
 
-
     if (source_config.dump_file) {
         dumper_.reset(new (dumper_) core::CsvDumper(source_config.dump_file,
                                                     dumper_config_, arena));
@@ -89,10 +88,9 @@ ReceiverSlot* ReceiverSource::create_slot(const ReceiverSlotConfig& slot_config)
 
     roc_log(LogInfo, "receiver source: adding slot");
 
-    core::SharedPtr<ReceiverSlot> slot =
-        new (arena_) ReceiverSlot(source_config_, slot_config, state_tracker_, *mixer_,
-                                  encoding_map_, packet_factory_, frame_factory_,
-                                  dumper_.get(), arena_);
+    core::SharedPtr<ReceiverSlot> slot = new (arena_)
+        ReceiverSlot(source_config_, slot_config, state_tracker_, *mixer_, encoding_map_,
+                     packet_factory_, frame_factory_, dumper_.get(), arena_);
 
     if (!slot || !slot->is_valid()) {
         roc_log(LogError, "receiver source: can't create slot");

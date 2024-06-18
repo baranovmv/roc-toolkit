@@ -175,7 +175,7 @@ bool receiver_config_from_user(node::Context&,
 
     if (in.start_latency != 0) {
         if (in.target_latency != 0) {
-            roc_log (LogError,
+            roc_log(LogError,
                     "bad configuration:"
                     " start latency must be 0 if latency tuning is disabled"
                     " (target_latency != 0)");

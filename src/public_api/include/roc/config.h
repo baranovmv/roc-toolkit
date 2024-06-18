@@ -901,7 +901,7 @@ typedef struct roc_receiver_config {
      * If target latency is set to zero, and latency tuning is enabled, this value
      * sets initial value of latency.
      */
-     unsigned long long start_latency;
+    unsigned long long start_latency;
 
     /** Minimum allowed latency, in nanoseconds.
      *

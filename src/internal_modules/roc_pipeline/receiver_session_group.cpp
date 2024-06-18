@@ -24,7 +24,7 @@ ReceiverSessionGroup::ReceiverSessionGroup(const ReceiverSourceConfig& source_co
                                            const rtp::EncodingMap& encoding_map,
                                            packet::PacketFactory& packet_factory,
                                            audio::FrameFactory& frame_factory,
-    core::CsvDumper* dumper,
+                                           core::CsvDumper* dumper,
                                            core::IArena& arena)
     : source_config_(source_config)
     , slot_config_(slot_config)

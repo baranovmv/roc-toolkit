@@ -27,7 +27,7 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
         tuner_backend = LatencyTunerBackend_Niq;
     }
 
-    const bool auto_tune_latency = target_latency == 0;
+    const bool auto_tune_latency = target_latency == 0 && start_latency > 0;
     const core::nanoseconds_t latency = std::max(target_latency, start_latency);
 
     if (tuner_profile == LatencyTunerProfile_Default) {
@@ -40,8 +40,7 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
                 // If latency is high, we assume the jitter may be also high. In
                 // this case use gradual profile because it can handle high jitter
                 // much better.
-                tuner_profile =
-                    latency > 0 && latency < 30 * core::Millisecond
+                tuner_profile = latency > 0 && latency < 30 * core::Millisecond
                     ? LatencyTunerProfile_Responsive
                     : LatencyTunerProfile_Gradual;
             } else {
@@ -57,12 +56,12 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
     }
 
     // Deduce default target latency.
-    if (auto_tune_latency && start_latency == 0) {
+    if (latency == 0) {
         if (is_receiver) {
             if (tuner_profile != LatencyTunerProfile_Intact) {
                 // Latency tuning is enabled on receiver.
                 // Use default if target latency is not specified.
-                start_latency = default_target_latency;
+                target_latency = default_target_latency;
             } else {
                 // Latency tuning is disabled on receiver.
                 // Most likely, it is enabled on sender. To make tuning work on sender,
@@ -82,12 +81,11 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
             }
         }
     }
-
     // If latency tuning is enabled.
     if (tuner_profile != LatencyTunerProfile_Intact) {
-        // Deduce defaults for min_latency & max_latency if both are zero.
-        if (min_latency == 0 && max_latency == 0) {
-            if (auto_tune_latency) {
+        if (auto_tune_latency) {
+            // Deduce defaults for min_latency & max_latency if both are zero.
+            if (min_latency == 0 && max_latency == 0) {
                 // Out formula doesn't work well on latencies close to zero.
                 const core::nanoseconds_t floored_target_latency =
                     std::max(std::max(start_latency, target_latency), core::Millisecond);
@@ -114,27 +112,49 @@ void LatencyConfig::deduce_defaults(core::nanoseconds_t default_target_latency,
                 max_latency = floored_target_latency + latency_tolerance;
 
                 if (upper_threshold_coef == 0.f) {
-                    upper_threshold_coef = (float)max_latency
-                        / (float)floored_target_latency;
+                    upper_threshold_coef =
+                        (float)max_latency / (float)floored_target_latency;
                 }
-            } else {
-                // Auto tune is enabled, set some sensible hard limits to the target latency:
-                min_latency = 2000 * core::Millisecond;
-                max_latency = 20 * core::Millisecond;
             }
-        }
+            // Fixed latency
+        } else {
+            // Deduce defaults for min_latency & max_latency if both are zero.
+            if (latency_tolerance == 0) {
+                // Out formula doesn't work well on latencies close to zero.
+                const core::nanoseconds_t floored_target_latency =
+                    std::max(latency, core::Millisecond);
 
-        // Deduce defaults for scaling_interval & scaling_tolerance.
-        if (scaling_interval == 0) {
-            scaling_interval = 5 * core::Millisecond;
-        }
-        if (scaling_tolerance == 0) {
-            scaling_tolerance = 0.005f;
+                // On sender, apply multiplier to make default tolerance a bit higher than
+                // on receiver. This way, if bounding is enabled on both sides, receiver
+                // will always trigger first.
+                const int multiplier = is_receiver ? 1 : 4;
+
+                // This formula returns target_latency * N, where N starts with larger
+                // number and approaches 0.5 as target_latency grows.
+                // By default we're very tolerant and allow rather big oscillations.
+                // Examples (for multiplier = 1):
+                //  target=1ms -> tolerance=8ms (x8)
+                //  target=10ms -> tolerance=20ms (x2)
+                //  target=200ms -> tolerance=200ms (x1)
+                //  target=2000ms -> tolerance=1444ms (x0.722)
+                latency_tolerance = core::nanoseconds_t(
+                    floored_target_latency
+                    * (std::log((200 * core::Millisecond) * 2 * multiplier)
+                       / std::log(floored_target_latency * 2)));
+            }
         }
     }
 
+    // Deduce defaults for scaling_interval & scaling_tolerance.
+    if (scaling_interval == 0) {
+        scaling_interval = 5 * core::Millisecond;
+    }
+    if (scaling_tolerance == 0) {
+        scaling_tolerance = 0.005f;
+    }
+
     // If latency bounding is enabled.
-    if (min_latency != 0 || max_latency != 0) {
+    if (min_latency != 0 || max_latency != 0 || latency_tolerance != 0) {
         // Deduce default for stale_tolerance.
         if (stale_tolerance == 0) {
             if (latency > 0) {
@@ -162,16 +182,19 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
     , freq_coeff_max_delta_(config.scaling_tolerance)
     , backend_(config.tuner_backend)
     , profile_(config.tuner_profile)
-    , enable_tuning_(config.tuner_profile != audio::LatencyTunerProfile_Intact &&
-                     config.start_latency != 0)
-    , enable_bounds_((config.tuner_profile != audio::LatencyTunerProfile_Intact && !enable_tuning_)
-                     || config.min_latency != 0 || config.max_latency != 0 || config.latency_tolerance != 0)
+    , enable_tuning_(config.tuner_profile != audio::LatencyTunerProfile_Intact
+                     && (config.start_latency != 0 || config.target_latency))
+    , enable_bounds_(
+          (config.tuner_profile != audio::LatencyTunerProfile_Intact && !enable_tuning_)
+          || config.min_latency != 0 || config.max_latency != 0
+          || config.latency_tolerance != 0)
     , has_niq_latency_(false)
     , niq_latency_(0)
     , niq_stalling_(0)
     , has_e2e_latency_(false)
     , e2e_latency_(0)
     , has_metrics_(false)
+    , auto_tune_(config.start_latency > 0 && config.target_latency == 0)
     , target_latency_(0)
     , min_latency_(0)
     , max_latency_(0)
@@ -189,6 +212,7 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
             "latency tuner: initializing:"
             " target_latency=%ld(%.3fms) start_latency=%ld(%.3fms)"
             " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)"
+            " latency_tolerance=%ld(%.3fms)"
             " latency_upper_limit_coef=%f",
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.target_latency),
             (double)config.target_latency / core::Millisecond,
@@ -198,6 +222,8 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
             (double)config.min_latency / core::Millisecond,
             (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
             (double)config.max_latency / core::Millisecond,
+            (long)sample_spec_.ns_2_stream_timestamp_delta(config.latency_tolerance),
+            (double)config.latency_tolerance / core::Millisecond,
             (double)config.upper_threshold_coef);
 
     roc_log(LogDebug,
@@ -234,106 +260,119 @@ LatencyTuner::LatencyTuner(const LatencyConfig& config,
         return;
     }
 
-    target_latency_ = sample_spec_.ns_2_stream_timestamp_delta(
-                        enable_tuning_
-                            ? config.start_latency
-                            : config.target_latency);
-    if (config.tuner_profile != audio::LatencyTunerProfile_Intact
-        && target_latency_ <= 0) {
-        roc_log(LogError,
-                "latency tuner: invalid config: target latency is invalid:"
-                " start_latency=%ld(%.3fms), target_latency=%ld(%.3fms)",
-                (long)sample_spec_.ns_2_stream_timestamp_delta(config.start_latency),
-                (double)config.start_latency / core::Millisecond,
-                (long)sample_spec_.ns_2_stream_timestamp_delta(config.target_latency),
-                (double)config.start_latency / core::Millisecond);
-        return;
-    }
+    if (enable_bounds_ || enable_tuning_) {
+        target_latency_ = sample_spec_.ns_2_stream_timestamp_delta(
+            auto_tune_ ? config.start_latency : config.target_latency);
 
-    if (enable_bounds_) {
-        min_latency_ = sample_spec_.ns_2_stream_timestamp_delta(config.min_latency);
-        max_latency_ = sample_spec_.ns_2_stream_timestamp_delta(config.max_latency);
-        max_stalling_ =
-            sample_spec_.ns_2_stream_timestamp_delta(config.stale_tolerance);
-
-        if ((float)target_latency_ * lat_update_upper_thrsh_
-                       > (float)max_latency_
-                   && enable_tuning_) {
-            roc_log(
-                LogError,
-                "latency tuner: invalid config: upper threshold coefficient is"
-                " out of bounds: "
-                " target_latency * %f = %ld(%.3fms)"
-                " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)",
-                (double)lat_update_upper_thrsh_,
-                (long)sample_spec_.ns_2_stream_timestamp_delta(
-                    (packet::stream_source_t)(target_latency_
-                                              * lat_update_upper_thrsh_)),
-                (double)(target_latency_ * lat_update_upper_thrsh_)
-                    / core::Millisecond,
-                (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
-                (double)config.min_latency / core::Millisecond,
-                (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
-                (double)config.max_latency / core::Millisecond);
-        }
-
-
-        if (target_latency_ < min_latency_ || target_latency_ > max_latency_) {
-            roc_log(
-                LogError,
-                "latency tuner: invalid config: target_latency is out of bounds:"
-                " target_latency=%ld(%.3fms)"
-                " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)",
-                (long)sample_spec_.ns_2_stream_timestamp_delta(target_latency_),
-                (double)config.target_latency / core::Millisecond,
-                (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
-                (double)config.min_latency / core::Millisecond,
-                (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
-                (double)config.max_latency / core::Millisecond);
-            return;
-        }
-    }
-
-    if (enable_tuning_) {
-        scale_interval_ =
-            sample_spec_.ns_2_stream_timestamp_delta(config.scaling_interval);
-
-        if (config.scaling_interval <= 0 || scale_interval_ <= 0) {
-            roc_log(
-                LogError,
-                "latency tuner: invalid config: scaling_interval is out of bounds:"
-                " scaling_interval=%ld(%.3fms)",
-                (long)sample_spec_.ns_2_stream_timestamp_delta(
-                    config.scaling_interval),
-                (double)config.scaling_interval / core::Millisecond);
-            return;
-        }
-
-        if (config.scaling_tolerance <= 0) {
-            roc_log(
-                LogError,
-                "latency tuner: invalid config: scaling_tolerance is out of bounds:"
-                " scaling_tolerance=%f",
-                (double)config.scaling_tolerance);
-            return;
-        }
-
-        if (config.upper_threshold_coef < 0) {
+        if (config.target_latency <= 0 || target_latency_ <= 0) {
             roc_log(LogError,
-                    "latency tuner: invalid config: upper threshold coef is negative:"
-                    " upper_threshold_coef=%f",
-                    (double)config.upper_threshold_coef);
-        }
-
-        fe_.reset(new (fe_) FreqEstimator(profile_ == LatencyTunerProfile_Responsive
-                                              ? FreqEstimatorProfile_Responsive
-                                              : FreqEstimatorProfile_Gradual,
-                                          (packet::stream_timestamp_t)target_latency_,
-                                          dumper_));
-        if (!fe_) {
+                    "latency tuner: invalid config: target_latency is invalid:"
+                    " target_latency=%ld(%.3fms)",
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.target_latency),
+                    (double)config.target_latency / core::Millisecond);
             return;
         }
-    }
+
+        if (enable_bounds_ && auto_tune_) {
+            min_latency_ = sample_spec_.ns_2_stream_timestamp_delta(config.min_latency);
+            max_latency_ = sample_spec_.ns_2_stream_timestamp_delta(config.max_latency);
+            max_stalling_ =
+                sample_spec_.ns_2_stream_timestamp_delta(config.stale_tolerance);
+
+            if ((float)target_latency_ * lat_update_upper_thrsh_ > (float)max_latency_
+                && enable_tuning_) {
+                roc_log(
+                    LogError,
+                    "latency tuner: invalid config: upper threshold coefficient is"
+                    " out of bounds: "
+                    " target_latency * %f = %ld(%.3fms)"
+                    " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)",
+                    (double)lat_update_upper_thrsh_,
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(
+                        (packet::stream_source_t)(target_latency_
+                                                  * lat_update_upper_thrsh_)),
+                    (double)(target_latency_ * lat_update_upper_thrsh_)
+                        / core::Millisecond,
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
+                    (double)config.min_latency / core::Millisecond,
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
+                    (double)config.max_latency / core::Millisecond);
+            }
+
+            if (target_latency_ < min_latency_ || target_latency_ > max_latency_) {
+                roc_log(
+                    LogError,
+                    "latency tuner: invalid config: target_latency is out of bounds:"
+                    " target_latency=%ld(%.3fms)"
+                    " min_latency=%ld(%.3fms) max_latency=%ld(%.3fms)",
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(target_latency_),
+                    (double)config.target_latency / core::Millisecond,
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.min_latency),
+                    (double)config.min_latency / core::Millisecond,
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(config.max_latency),
+                    (double)config.max_latency / core::Millisecond);
+                return;
+            }
+        } else if (enable_bounds_ && !auto_tune_) {
+            min_latency_ = sample_spec_.ns_2_stream_timestamp_delta(
+                config.target_latency - config.latency_tolerance);
+            max_latency_ = sample_spec_.ns_2_stream_timestamp_delta(
+                config.target_latency + config.latency_tolerance);
+            max_stalling_ =
+                sample_spec_.ns_2_stream_timestamp_delta(config.stale_tolerance);
+
+            if (config.latency_tolerance < 0) {
+                roc_log(LogError,
+                        "latency tuner: invalid config: latency_tolerance is invalid:"
+                        " latency_tolerance=%ld(%.3fms)",
+                        (long)sample_spec_.ns_2_stream_timestamp_delta(
+                            config.latency_tolerance),
+                        (double)config.latency_tolerance / core::Millisecond);
+                return;
+            }
+        }
+
+        if (enable_tuning_) {
+            scale_interval_ =
+                sample_spec_.ns_2_stream_timestamp_delta(config.scaling_interval);
+
+            if (config.scaling_interval <= 0 || scale_interval_ <= 0) {
+                roc_log(
+                    LogError,
+                    "latency tuner: invalid config: scaling_interval is out of bounds:"
+                    " scaling_interval=%ld(%.3fms)",
+                    (long)sample_spec_.ns_2_stream_timestamp_delta(
+                        config.scaling_interval),
+                    (double)config.scaling_interval / core::Millisecond);
+                return;
+            }
+
+            if (config.scaling_tolerance <= 0) {
+                roc_log(
+                    LogError,
+                    "latency tuner: invalid config: scaling_tolerance is out of bounds:"
+                    " scaling_tolerance=%f",
+                    (double)config.scaling_tolerance);
+                return;
+            }
+
+            if (auto_tune_ && config.upper_threshold_coef < 0) {
+                roc_log(LogError,
+                        "latency tuner: invalid config: upper threshold coef is negative:"
+                        " upper_threshold_coef=%f",
+                        (double)config.upper_threshold_coef);
+            }
+
+            fe_.reset(new (fe_) FreqEstimator(profile_ == LatencyTunerProfile_Responsive
+                                                  ? FreqEstimatorProfile_Responsive
+                                                  : FreqEstimatorProfile_Gradual,
+                                              (packet::stream_timestamp_t)target_latency_,
+                                              dumper_));
+            if (!fe_) {
+                return;
+            }
+        }
+    } // enable_bounds_ || enable_tuning_
 
     valid_ = true;
 }
