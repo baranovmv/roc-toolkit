@@ -207,8 +207,8 @@ TEST(packetizer, one_buffer_one_packet) {
 
     rtp::Identity identity;
     rtp::Sequencer sequencer(identity, PayloadType);
-    Packetizer packetizer(packet_queue, rtp_composer, sequencer, encoder, packet_factory,
-                          PacketDuration, frame_spec);
+    Packetizer packetizer(arena, packet_queue, rtp_composer, sequencer, encoder,
+                          packet_factory, PacketDuration, frame_spec);
     LONGS_EQUAL(status::StatusOK, packetizer.init_status());
 
     FrameMaker frame_maker;
@@ -235,7 +235,7 @@ TEST(packetizer, one_buffer_multiple_packets) {
 
     rtp::Identity identity;
     rtp::Sequencer sequencer(identity, PayloadType);
-    Packetizer packetizer(packet_queue, rtp_composer, sequencer, encoder, packet_factory,
+    Packetizer packetizer(arena, packet_queue, rtp_composer, sequencer, encoder, packet_factory,
                           PacketDuration, frame_spec);
     LONGS_EQUAL(status::StatusOK, packetizer.init_status());
 
@@ -263,7 +263,7 @@ TEST(packetizer, multiple_buffers_one_packet) {
 
     rtp::Identity identity;
     rtp::Sequencer sequencer(identity, PayloadType);
-    Packetizer packetizer(packet_queue, rtp_composer, sequencer, encoder, packet_factory,
+    Packetizer packetizer(arena, packet_queue, rtp_composer, sequencer, encoder, packet_factory,
                           PacketDuration, frame_spec);
     LONGS_EQUAL(status::StatusOK, packetizer.init_status());
 
@@ -297,7 +297,7 @@ TEST(packetizer, multiple_buffers_multiple_packets) {
 
     rtp::Identity identity;
     rtp::Sequencer sequencer(identity, PayloadType);
-    Packetizer packetizer(packet_queue, rtp_composer, sequencer, encoder, packet_factory,
+    Packetizer packetizer(arena, packet_queue, rtp_composer, sequencer, encoder, packet_factory,
                           PacketDuration, frame_spec);
     LONGS_EQUAL(status::StatusOK, packetizer.init_status());
 
@@ -325,7 +325,7 @@ TEST(packetizer, flush) {
 
     rtp::Identity identity;
     rtp::Sequencer sequencer(identity, PayloadType);
-    Packetizer packetizer(packet_queue, rtp_composer, sequencer, encoder, packet_factory,
+    Packetizer packetizer(arena, packet_queue, rtp_composer, sequencer, encoder, packet_factory,
                           PacketDuration, frame_spec);
     LONGS_EQUAL(status::StatusOK, packetizer.init_status());
 
@@ -364,7 +364,7 @@ TEST(packetizer, timestamp_zero_cts) {
 
     rtp::Identity identity;
     rtp::Sequencer sequencer(identity, PayloadType);
-    Packetizer packetizer(packet_queue, rtp_composer, sequencer, encoder, packet_factory,
+    Packetizer packetizer(arena, packet_queue, rtp_composer, sequencer, encoder, packet_factory,
                           PacketDuration, frame_spec);
     LONGS_EQUAL(status::StatusOK, packetizer.init_status());
 
@@ -392,7 +392,7 @@ TEST(packetizer, metrics) {
 
     rtp::Identity identity;
     rtp::Sequencer sequencer(identity, PayloadType);
-    Packetizer packetizer(packet_queue, rtp_composer, sequencer, encoder, packet_factory,
+    Packetizer packetizer(arena, packet_queue, rtp_composer, sequencer, encoder, packet_factory,
                           PacketDuration, frame_spec);
     LONGS_EQUAL(status::StatusOK, packetizer.init_status());
 
@@ -417,7 +417,7 @@ TEST(packetizer, forward_error) {
 
     rtp::Identity identity;
     rtp::Sequencer sequencer(identity, PayloadType);
-    Packetizer packetizer(packet_writer, rtp_composer, sequencer, encoder, packet_factory,
+    Packetizer packetizer(arena, packet_writer, rtp_composer, sequencer, encoder, packet_factory,
                           PacketDuration, frame_spec);
     LONGS_EQUAL(status::StatusOK, packetizer.init_status());
 

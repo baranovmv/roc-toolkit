@@ -16,6 +16,7 @@
 #include "roc_audio/iframe_writer.h"
 #include "roc_audio/sample.h"
 #include "roc_audio/sample_spec.h"
+#include "roc_core/mov_stats.h"
 #include "roc_core/noncopyable.h"
 #include "roc_core/time.h"
 #include "roc_packet/icomposer.h"
@@ -60,7 +61,8 @@ public:
     //!  - @p buffer_factory is used to allocate buffers for packets
     //!  - @p packet_length defines packet length in nanoseconds
     //!  - @p sample_spec describes input frames
-    Packetizer(packet::IWriter& writer,
+    Packetizer(core::IArena& arena,
+               packet::IWriter& writer,
                packet::IComposer& composer,
                packet::ISequencer& sequencer,
                IFrameEncoder& payload_encoder,
@@ -90,12 +92,15 @@ private:
     status::StatusCode end_packet_();
 
     status::StatusCode create_packet_();
-    void pad_packet_(size_t written_payload_size);
+    void pad_packet_(size_t written_payload_size, size_t required_sz);
+
+    size_t sz_ceil_(size_t sz);
 
     packet::IWriter& writer_;
     packet::IComposer& composer_;
     packet::ISequencer& sequencer_;
     IFrameEncoder& payload_encoder_;
+    const bool do_padding_;
 
     packet::PacketFactory& packet_factory_;
 
@@ -110,6 +115,7 @@ private:
     core::nanoseconds_t capture_ts_;
 
     PacketizerMetrics metrics_;
+    core::MovStats<size_t> pkt_sz_stats_;
 
     status::StatusCode init_status_;
 };

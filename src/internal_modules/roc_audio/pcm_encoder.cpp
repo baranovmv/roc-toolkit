@@ -72,5 +72,9 @@ void PcmEncoder::end_frame() {
     frame_bit_off_ = 0;
 }
 
+bool PcmEncoder::variable_frame_bytecount() const {
+    return false;
+}
+
 } // namespace audio
 } // namespace roc

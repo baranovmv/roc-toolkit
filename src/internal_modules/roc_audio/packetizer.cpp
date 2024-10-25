@@ -15,7 +15,8 @@
 namespace roc {
 namespace audio {
 
-Packetizer::Packetizer(packet::IWriter& writer,
+Packetizer::Packetizer(core::IArena& arena,
+                       packet::IWriter& writer,
                        packet::IComposer& composer,
                        packet::ISequencer& sequencer,
                        IFrameEncoder& payload_encoder,
@@ -26,6 +27,7 @@ Packetizer::Packetizer(packet::IWriter& writer,
     , composer_(composer)
     , sequencer_(sequencer)
     , payload_encoder_(payload_encoder)
+    , do_padding_(payload_encoder.variable_frame_bytecount())
     , packet_factory_(packet_factory)
     , sample_spec_(sample_spec)
     , samples_per_packet_(0)
@@ -33,6 +35,7 @@ Packetizer::Packetizer(packet::IWriter& writer,
     , packet_pos_(0)
     , packet_cts_(0)
     , capture_ts_(0)
+    , pkt_sz_stats_(arena, 1000)
     , init_status_(status::NoStatus) {
     roc_panic_if_msg(!sample_spec_.is_valid() || !sample_spec_.is_raw(),
                      "packetizer: required valid sample spec with raw format: %s",
@@ -49,7 +52,9 @@ Packetizer::Packetizer(packet::IWriter& writer,
     }
 
     samples_per_packet_ = sample_spec.ns_2_stream_timestamp(packet_length);
-    payload_size_ = payload_encoder.encoded_byte_count(samples_per_packet_);
+    payload_size_ = do_padding_
+                    ? sz_ceil_(payload_encoder.encoded_byte_count(samples_per_packet_))
+                    : payload_encoder.encoded_byte_count(samples_per_packet_);
 
     roc_log(
         LogDebug,
@@ -161,9 +166,15 @@ status::StatusCode Packetizer::end_packet_() {
     // Fill protocol-specific fields.
     sequencer_.next(*packet_, packet_cts_, (packet::stream_timestamp_t)packet_pos_);
 
-    // Apply padding if needed.
-    if (packet_pos_ < samples_per_packet_) {
-        pad_packet_(written_payload_size);
+    if (do_padding_) {
+        const size_t round_payload_size = sz_ceil_(written_payload_size);
+        pkt_sz_stats_.add(round_payload_size);
+        pad_packet_(written_payload_size, pkt_sz_stats_.mov_max());
+    } else {
+        // Apply padding if needed.
+        if (packet_pos_ < samples_per_packet_) {
+            pad_packet_(written_payload_size, payload_size_);
+        }
     }
 
     const status::StatusCode code = writer_.write(packet_);
@@ -208,14 +219,26 @@ status::StatusCode Packetizer::create_packet_() {
     return status::StatusOK;
 }
 
-void Packetizer::pad_packet_(size_t written_payload_size) {
-    if (written_payload_size == payload_size_) {
+void Packetizer::pad_packet_(size_t written_payload_size, size_t required_sz) {
+    if (written_payload_size == required_sz) {
         return;
     }
 
-    if (!composer_.pad(*packet_, payload_size_ - written_payload_size)) {
+    if (!composer_.pad(*packet_, required_sz - written_payload_size)) {
         roc_panic("packetizer: can't pad packet: orig_size=%lu actual_size=%lu",
-                  (unsigned long)payload_size_, (unsigned long)written_payload_size);
+                  (unsigned long)required_sz, (unsigned long)written_payload_size);
+    }
+}
+
+size_t Packetizer::sz_ceil_(size_t sz) {
+    const size_t round_up_to = 0x40;
+    const size_t mask = round_up_to - 1;
+    const size_t inv_mask = ((size_t)-1) ^ mask;
+
+    if ((sz & mask) > 0) {
+        return sz & inv_mask + round_up_to;
+    } else {
+        return sz & inv_mask;
     }
 }
 

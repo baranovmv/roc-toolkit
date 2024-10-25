@@ -44,6 +44,9 @@ public:
     //! Finish encoding frame.
     virtual void end_frame();
 
+    //! This encoder has direct mapping from number of samples to a frame size.
+    virtual bool variable_frame_bytecount() const;
+
 private:
     PcmMapper pcm_mapper_;
     const size_t n_chans_;

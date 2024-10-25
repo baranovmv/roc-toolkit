@@ -62,6 +62,14 @@ public:
     //!  After this call, the frame is fully encoded and no more samples is written
     //!  to the frame. A new frame should be started by calling begin_frame().
     virtual void end_frame() = 0;
+
+    //! If this encoder implies different frame sizes.
+    //!
+    //! @remarks
+    //!  If this is compression encoder, probably its output frame sizes are dependant to
+    //!  underlying content, so if some part of sending pipeline needs steady packet sizes
+    //!  some padding might be required.
+    virtual bool variable_frame_bytecount() const = 0;
 };
 
 } // namespace audio

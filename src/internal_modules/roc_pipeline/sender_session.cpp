@@ -150,8 +150,9 @@ SenderSession::create_transport_pipeline(SenderEndpoint* source_endpoint,
                                         pkt_encoding->sample_spec.channel_set());
 
         packetizer_.reset(new (packetizer_) audio::Packetizer(
-            *pkt_writer, source_endpoint->outbound_composer(), *sequencer_,
-            *payload_encoder_, packet_factory_, sink_config_.packet_length, in_spec));
+            arena_, *pkt_writer, source_endpoint->outbound_composer(),
+            *sequencer_, *payload_encoder_, packet_factory_, sink_config_.packet_length,
+            in_spec));
         if ((status = packetizer_->init_status()) != status::StatusOK) {
             return status;
         }
