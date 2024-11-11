@@ -11,6 +11,7 @@
 #include "roc_core/panic.h"
 #include "roc_core/stddefs.h"
 #include "roc_packet/fec_scheme.h"
+#include <string.h>
 
 extern "C" {
 #include <of_mem.h>
@@ -31,6 +32,7 @@ OpenfecDecoder::OpenfecDecoder(const CodecConfig& config,
     , of_sess_params_(NULL)
     , packet_factory_(packet_factory)
     , buff_tab_(arena)
+    , inner_buff_tab_(arena)
     , data_tab_(arena)
     , recv_tab_(arena)
     , status_(arena)
@@ -98,7 +100,7 @@ status::StatusCode
 OpenfecDecoder::begin_block(size_t sblen, size_t rblen, size_t payload_size) {
     roc_panic_if(init_status_ != status::StatusOK);
 
-    if (!resize_tabs_(sblen + rblen)) {
+    if (!resize_tabs_(sblen + rblen, payload_size)) {
         roc_log(
             LogError,
             "openfec decoder: failed to resize tabs in begin_block, sblen=%lu, rblen=%lu",
@@ -108,7 +110,6 @@ OpenfecDecoder::begin_block(size_t sblen, size_t rblen, size_t payload_size) {
 
     sblen_ = sblen;
     rblen_ = rblen;
-    payload_size_ = payload_size;
     max_index_ = 0;
 
     update_session_params_(sblen, rblen, payload_size);
@@ -129,7 +130,7 @@ void OpenfecDecoder::set_buffer(size_t index, const core::Slice<uint8_t>& buffer
         roc_panic("openfec decoder: null buffer");
     }
 
-    if (buffer.size() == 0 || buffer.size() != payload_size_) {
+    if (buffer.size() == 0 || buffer.size() > payload_size_) {
         roc_panic("openfec decoder: invalid payload size: cur=%lu new=%lu",
                   (unsigned long)payload_size_, (unsigned long)buffer.size());
     }
@@ -142,7 +143,9 @@ void OpenfecDecoder::set_buffer(size_t index, const core::Slice<uint8_t>& buffer
     has_new_packets_ = true;
 
     buff_tab_[index] = buffer;
-    data_tab_[index] = buffer.data();
+    memcpy(inner_buff_tab_[index].data(), buffer.data(), buffer.size());
+    memset(inner_buff_tab_[index].data() + buffer.size(), 0, payload_size_ - buffer.size());
+    data_tab_[index] = inner_buff_tab_[index].data();
     recv_tab_[index] = true;
 
     // register new packet and try to repair more packets
@@ -200,7 +203,35 @@ void OpenfecDecoder::reset_tabs_() {
     }
 }
 
-bool OpenfecDecoder::resize_tabs_(size_t size) {
+bool OpenfecDecoder::resize_tabs_(size_t size, size_t payload_sz) {
+    if (inner_buff_tab_.size() < size) {
+        const size_t old_size = inner_buff_tab_.size();
+        if (!inner_buff_tab_.resize(size)) {
+            return false;
+        }
+        for (size_t n = old_size; n < size; n++) {
+            inner_buff_tab_[n] = packet_factory_.new_packet_buffer();
+
+            if (!inner_buff_tab_[n]) {
+                roc_log(LogError, "openfec decoder: can't allocate buffer");
+                return false;
+            }
+
+            if (inner_buff_tab_[n].capacity() < payload_sz) {
+                roc_log(LogError, "openfec decoder: packet size too large: size=%lu max=%lu",
+                        (unsigned long)payload_sz, (unsigned long)inner_buff_tab_[n].capacity());
+                return false;
+            }
+        }
+
+    }
+    if (payload_size_ != payload_sz) {
+        for (size_t n = 0; n < size; n++) {
+            inner_buff_tab_[n].reslice(0, payload_sz);
+        }
+        payload_size_ = payload_sz;
+    }
+
     if (!buff_tab_.resize(size)) {
         return false;
     }
@@ -338,7 +369,7 @@ void OpenfecDecoder::destroy_session_() {
         if (data_tab_[i] == NULL) {
             continue;
         }
-        if (buff_tab_[i] && buff_tab_[i].data() == data_tab_[i]) {
+        if (buff_tab_[i] && inner_buff_tab_[i].data() == data_tab_[i]) {
             continue;
         }
 

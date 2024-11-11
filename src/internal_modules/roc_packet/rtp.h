@@ -93,6 +93,9 @@ struct RTP {
 
     //! Determine packet order.
     int compare(const RTP&) const;
+
+    //! Size of header + payload + padding.
+    size_t overall_sz() const;
 };
 
 } // namespace packet

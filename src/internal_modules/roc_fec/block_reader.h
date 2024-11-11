@@ -137,6 +137,9 @@ private:
     bool repair_block_resized_;
     bool payload_resized_;
 
+    packet::stream_source_t source_ssrc_;
+    bool source_ssrc_set_;
+
     unsigned n_packets_;
 
     bool prev_block_timestamp_valid_;

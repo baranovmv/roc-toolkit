@@ -11,6 +11,7 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_packet/fec_scheme.h"
+#include "roc_rtp/headers.h"
 #include "roc_status/code_to_str.h"
 
 namespace roc {
@@ -28,12 +29,13 @@ BlockWriter::BlockWriter(const BlockWriterConfig& config,
     , next_sblen_(0)
     , cur_rblen_(0)
     , next_rblen_(0)
-    , cur_payload_size_(0)
+    , repair_payload_size_(0)
     , block_encoder_(block_encoder)
     , pkt_writer_(writer)
     , source_composer_(source_composer)
     , repair_composer_(repair_composer)
     , packet_factory_(packet_factory)
+    , source_block_(arena)
     , repair_block_(arena)
     , first_packet_(true)
     , cur_packet_(0)
@@ -131,6 +133,27 @@ status::StatusCode BlockWriter::write(const packet::PacketPtr& pp) {
         return code;
     }
 
+    if (HEDLEY_UNLIKELY(!pp->rtp())) {
+        roc_panic("fec block writer: support RTP source packets only");
+    } else {
+        // Copy the entire source rtp packet together with header, so as to
+        // be able to alter it before fec encoding.
+        // We want SSRC of each source header to hold actual payload size of the packet,
+        // in order to be able to recover the size on a receiver side.
+        source_block_[cur_packet_].reslice(0, pp->rtp()->overall_sz());
+        uint8_t* pdest = source_block_[cur_packet_].data();
+        memcpy(pdest, pp->rtp()->header.data(), pp->rtp()->header.size());
+        rtp::Header& header = *(rtp::Header*)pdest;
+        pdest += pp->rtp()->header.size();
+        memcpy(pdest, pp->rtp()->payload.data(), pp->rtp()->payload.size());
+        pdest += pp->rtp()->payload.size();
+        if (!!pp->rtp()->padding.size()) {
+            memcpy(pdest, pp->rtp()->padding.data(), pp->rtp()->padding.size());
+        }
+        header.set_ssrc(((header.ssrc() ^ 0xFFFF0000) & 0xFFFF0000)
+                        | (pp->rtp()->overall_sz() & 0x0000FFFF));
+    }
+
     cur_packet_++;
 
     if (cur_packet_ == cur_sblen_) {
@@ -148,30 +171,36 @@ status::StatusCode BlockWriter::write(const packet::PacketPtr& pp) {
 status::StatusCode BlockWriter::begin_block_(const packet::PacketPtr& pp) {
     update_block_duration_(pp);
 
-    if (!apply_sizes_(next_sblen_, next_rblen_, pp->fec()->payload.size())) {
+    if (!apply_sizes_(next_sblen_, next_rblen_)) {
         return status::StatusNoMem;
     }
 
     roc_log(LogTrace,
-            "fec block writer: begin block: sbn=%lu sblen=%lu rblen=%lu payload_size=%lu",
-            (unsigned long)cur_sbn_, (unsigned long)cur_sblen_, (unsigned long)cur_rblen_,
-            (unsigned long)cur_payload_size_);
+            "fec block writer: begin block: sbn=%lu sblen=%lu rblen=%lu",
+            (unsigned long)cur_sbn_, (unsigned long)cur_sblen_, (unsigned long)cur_rblen_);
 
-    const status::StatusCode code =
-        block_encoder_.begin_block(cur_sblen_, cur_rblen_, cur_payload_size_);
-
-    if (code != status::StatusOK) {
-        roc_log(LogError,
-                "fec block writer: can't begin encoder block:"
-                " sblen=%lu rblen=%lu",
-                (unsigned long)cur_sblen_, (unsigned long)cur_rblen_);
-    }
-
-    return code;
+    return status::StatusOK;
 }
 
 status::StatusCode BlockWriter::end_block_() {
     status::StatusCode code = status::NoStatus;
+
+    repair_payload_size_ = 0;
+    for (size_t i = 0; i < cur_sblen_; ++i) {
+        repair_payload_size_ = std::max(repair_payload_size_, source_block_[i].size());
+    }
+    if ((code = block_encoder_.begin_block(cur_sblen_, cur_rblen_,
+                                           repair_payload_size_)) != status::StatusOK){
+        roc_log(LogError,
+                "fec block writer: can't begin encoder block:"
+                " sblen=%lu rblen=%lu",
+                (unsigned long)cur_sblen_, (unsigned long)cur_rblen_);
+
+        return code;
+    }
+    for (size_t i = 0; i < cur_sblen_; ++i) {
+        block_encoder_.set_buffer(i, source_block_[i]);
+    }
 
     if ((code = make_repair_packets_()) != status::StatusOK) {
         return code;
@@ -200,7 +229,25 @@ void BlockWriter::next_block_() {
     cur_packet_ = 0;
 }
 
-bool BlockWriter::apply_sizes_(size_t sblen, size_t rblen, size_t payload_size) {
+bool BlockWriter::apply_sizes_(size_t sblen, size_t rblen) {
+    if (source_block_.size() < sblen) {
+        const size_t old_sz = source_block_.size();
+        if (!source_block_.resize(sblen)) {
+            roc_log(LogError,
+                    "fec block writer: can't allocate source block memory:"
+                    " cur_sbl=%lu new_bl=%lu",
+                    (unsigned long)source_block_.size(), (unsigned long)sblen);
+            return false;
+        }
+        for (size_t i = old_sz; i < sblen; ++i) {
+            source_block_[i] = packet_factory_.new_packet_buffer();
+            if (!source_block_[i]) {
+                roc_log(LogError, "fec block writer: can't allocate buffer");
+                return status::StatusNoMem;
+            }
+        }
+    }
+
     if (repair_block_.size() != rblen) {
         if (!repair_block_.resize(rblen)) {
             roc_log(LogError,
@@ -213,14 +260,11 @@ bool BlockWriter::apply_sizes_(size_t sblen, size_t rblen, size_t payload_size) 
 
     cur_sblen_ = sblen;
     cur_rblen_ = rblen;
-    cur_payload_size_ = payload_size;
 
     return true;
 }
 
 status::StatusCode BlockWriter::write_source_packet_(const packet::PacketPtr& pp) {
-    block_encoder_.set_buffer(cur_packet_, pp->fec()->payload);
-
     fill_packet_fec_fields_(pp, (packet::seqnum_t)cur_packet_);
 
     if (!source_composer_.compose(*pp)) {
@@ -267,7 +311,7 @@ status::StatusCode BlockWriter::make_repair_packet_(packet::seqnum_t pack_n,
         return status::StatusBadBuffer;
     }
 
-    if (!repair_composer_.prepare(*packet, buffer, cur_payload_size_)) {
+    if (!repair_composer_.prepare(*packet, buffer, repair_payload_size_)) {
         roc_log(LogError, "fec block writer: can't prepare packet");
         // TODO(gh-183): forward status from composer
         return status::StatusBadBuffer;
@@ -366,14 +410,6 @@ void BlockWriter::validate_packet_(const packet::PacketPtr& pp) {
 
     if (payload_size == 0) {
         roc_panic("fec block writer: unexpected packet with zero payload size");
-    }
-
-    if (cur_packet_ != 0 && payload_size != cur_payload_size_) {
-        roc_panic(
-            "fec block writer: unexpected payload size change in the middle of a block:"
-            " sbn=%lu esi=%lu old_size=%lu new_size=%lu",
-            (unsigned long)cur_sbn_, (unsigned long)cur_packet_,
-            (unsigned long)cur_payload_size_, (unsigned long)payload_size);
     }
 }
 

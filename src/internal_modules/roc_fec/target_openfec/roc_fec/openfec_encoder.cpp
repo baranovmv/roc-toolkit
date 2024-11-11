@@ -22,7 +22,9 @@ OpenfecEncoder::OpenfecEncoder(const CodecConfig& config,
     , rblen_(0)
     , payload_size_(0)
     , of_sess_(NULL)
+    , packet_factory_(packet_factory)
     , buff_tab_(arena)
+    , inner_buff_tab_(arena)
     , data_tab_(arena)
     , init_status_(status::NoStatus) {
     switch (config.scheme) {
@@ -96,7 +98,7 @@ OpenfecEncoder::begin_block(size_t sblen, size_t rblen, size_t payload_size) {
         return status::StatusOK;
     }
 
-    if (!resize_tabs_(sblen + rblen)) {
+    if (!resize_tabs_(sblen + rblen, payload_size)) {
         roc_log(
             LogError,
             "openfec encoder: failed to resize tabs in begin_block, sblen=%lu, rblen=%lu",
@@ -106,7 +108,6 @@ OpenfecEncoder::begin_block(size_t sblen, size_t rblen, size_t payload_size) {
 
     sblen_ = sblen;
     rblen_ = rblen;
-    payload_size_ = payload_size;
 
     update_session_params_(sblen, rblen, payload_size);
     reset_session_();
@@ -126,9 +127,9 @@ void OpenfecEncoder::set_buffer(size_t index, const core::Slice<uint8_t>& buffer
         roc_panic("openfec encoder: null buffer");
     }
 
-    if (buffer.size() == 0 || buffer.size() != payload_size_) {
-        roc_panic("openfec encoder: invalid payload size: cur=%lu new=%lu",
-                  (unsigned long)payload_size_, (unsigned long)buffer.size());
+    if (buffer.size() == 0) {
+        roc_panic("openfec encoder: invalid payload size: %lu",
+                  (unsigned long)buffer.size());
     }
 
     if ((uintptr_t)buffer.data() % Alignment != 0) {
@@ -136,8 +137,10 @@ void OpenfecEncoder::set_buffer(size_t index, const core::Slice<uint8_t>& buffer
                   (int)Alignment, (unsigned long)index);
     }
 
-    data_tab_[index] = buffer.data();
     buff_tab_[index] = buffer;
+    memcpy(inner_buff_tab_[index].data(), buffer.data(), buffer.size());
+    memset(inner_buff_tab_[index].data() + buffer.size(), 0, payload_size_ - buffer.size());
+    data_tab_[index] = inner_buff_tab_[index].data();
 }
 
 void OpenfecEncoder::fill_buffers() {
@@ -163,7 +166,35 @@ void OpenfecEncoder::end_block() {
     }
 }
 
-bool OpenfecEncoder::resize_tabs_(size_t size) {
+bool OpenfecEncoder::resize_tabs_(size_t size, size_t payload_sz) {
+    if (inner_buff_tab_.size() < size) {
+        const size_t old_size = inner_buff_tab_.size();
+        if (!inner_buff_tab_.resize(size)) {
+            return false;
+        }
+        for (size_t n = old_size; n < size; n++) {
+            inner_buff_tab_[n] = packet_factory_.new_packet_buffer();
+
+            if (!inner_buff_tab_[n]) {
+                roc_log(LogError, "openfec encoder: can't allocate buffer");
+                return false;
+            }
+
+            if (inner_buff_tab_[n].capacity() < payload_sz) {
+                roc_log(LogError, "openfec encoder: packet size too large: size=%lu max=%lu",
+                        (unsigned long)payload_sz, (unsigned long)inner_buff_tab_[n].capacity());
+                return false;
+            }
+        }
+
+    }
+    if (payload_size_ != payload_sz) {
+        for (size_t n = 0; n < size; n++) {
+            inner_buff_tab_[n].reslice(0, payload_sz);
+        }
+        payload_size_ = payload_sz;
+    }
+
     if (!buff_tab_.resize(size)) {
         return false;
     }

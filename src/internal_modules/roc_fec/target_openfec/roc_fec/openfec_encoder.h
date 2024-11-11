@@ -61,7 +61,7 @@ public:
     virtual void end_block();
 
 private:
-    bool resize_tabs_(size_t size);
+    bool resize_tabs_(size_t size, size_t payload_sz);
     void reset_session_();
     void update_session_params_(size_t sblen, size_t rblen, size_t payload_size);
 
@@ -85,7 +85,13 @@ private:
 #endif
     } codec_params_;
 
+    packet::PacketFactory& packet_factory_;
+
     core::Array<core::Slice<uint8_t> > buff_tab_;
+    // The storage we copy buffers content to. It is needed as actual buffer size could
+    // be smaller than payload_size_.
+    core::Array<core::Slice<uint8_t> > inner_buff_tab_;
+
     core::Array<void*> data_tab_;
 
     size_t max_block_length_;

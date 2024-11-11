@@ -81,7 +81,7 @@ private:
     status::StatusCode end_block_();
     void next_block_();
 
-    bool apply_sizes_(size_t sblen, size_t rblen, size_t payload_size);
+    bool apply_sizes_(size_t sblen, size_t rblen);
 
     status::StatusCode write_source_packet_(const packet::PacketPtr&);
     status::StatusCode make_repair_packets_();
@@ -101,7 +101,7 @@ private:
     size_t cur_rblen_;
     size_t next_rblen_;
 
-    size_t cur_payload_size_;
+    size_t repair_payload_size_;
 
     IBlockEncoder& block_encoder_;
     packet::IWriter& pkt_writer_;
@@ -111,6 +111,7 @@ private:
 
     packet::PacketFactory& packet_factory_;
 
+    core::Array< core::Slice<uint8_t> > source_block_;
     core::Array<packet::PacketPtr> repair_block_;
 
     bool first_packet_;

@@ -7,6 +7,7 @@
  */
 
 #include "roc_fec/block_reader.h"
+#include "roc_rtp/headers.h"
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_packet/fec_scheme.h"
@@ -40,6 +41,7 @@ BlockReader::BlockReader(const BlockReaderConfig& config,
     , source_block_resized_(false)
     , repair_block_resized_(false)
     , payload_resized_(false)
+    , source_ssrc_set_(false)
     , n_packets_(0)
     , prev_block_timestamp_valid_(false)
     , block_max_duration_(0)
@@ -251,8 +253,33 @@ status::StatusCode BlockReader::try_repair_() {
         return status::StatusOK;
     }
 
+    // Check that payload size of source packets does not overcome repair packets,
+    // and all the repair packets have equal sizes.
+    size_t payload_size = 0;
+    for (size_t n = 0; n < source_block_.size(); n++) {
+        if (!source_block_[n]) {
+            continue;
+        }
+        payload_size = std::max(payload_size, source_block_[n]->fec()->payload.size());
+    }
+    for (size_t n = 0; n < repair_block_.size(); n++) {
+        if (!repair_block_[n]) {
+            continue;
+        }
+        if (n == 0 && repair_block_[n]->fec()->payload.size() < payload_size) {
+            roc_log(LogError, "fec block reader: source packets payload size can't be"
+                              " greater than a repair packet");
+            return status::StatusBadProtocol;
+        } else if (n > 0 && repair_block_[n]->fec()->payload.size() != payload_size) {
+            roc_log(LogError, "fec block reader: payload size must be equal for all"
+                              " repair packets");
+            return status::StatusBadProtocol;
+        }
+        payload_size = std::max(payload_size, repair_block_[n]->fec()->payload.size());
+    }
+
     const status::StatusCode code = block_decoder_.begin_block(
-        source_block_.size(), repair_block_.size(), payload_size_);
+        source_block_.size(), repair_block_.size(), payload_size);
 
     if (code != status::StatusOK) {
         roc_log(LogError,
@@ -561,6 +588,20 @@ status::StatusCode BlockReader::process_source_packet_(const packet::PacketPtr& 
 
     if ((code = update_source_block_size_(fec.source_block_length)) != status::StatusOK) {
         return code;
+    }
+
+    if (!pp->rtp()) {
+        // TODO: panic?
+        roc_log(LogError, "fec block reader: can not retrieve rtp from a source packet");
+        return status::StatusBadPacket;
+    }
+    rtp::Header& header = *(rtp::Header*)pp->rtp()->header.data();
+    packet::stream_source_t pp_ssrc = header.ssrc();
+    if (!source_ssrc_set_) {
+        source_ssrc_ = pp_ssrc;
+    } else if (source_ssrc_ != pp_ssrc) {
+        roc_log(LogError, "fec block reader: source packet belongs to a wrong stream");
+        return status::StatusBadPacket;
     }
 
     return status::StatusOK;

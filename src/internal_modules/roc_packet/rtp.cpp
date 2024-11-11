@@ -31,5 +31,9 @@ int RTP::compare(const RTP& other) const {
     }
 }
 
+size_t RTP::overall_sz() const {
+    return header.size() + payload.size() + padding.size();
+}
+
 } // namespace packet
 } // namespace roc
