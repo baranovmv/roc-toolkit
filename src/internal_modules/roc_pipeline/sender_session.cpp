@@ -233,9 +233,9 @@ SenderSession::create_control_pipeline(SenderEndpoint* control_endpoint) {
 
     rtcp_outbound_addr_ = control_endpoint->outbound_address();
 
-    rtcp_communicator_.reset(new (rtcp_communicator_) rtcp::Communicator(
-        sink_config_.rtcp, *this, control_endpoint->outbound_writer(),
-        control_endpoint->outbound_composer(), packet_factory_, arena_));
+    rtcp_communicator_.reset(new(rtcp_communicator_) rtcp::Communicator(
+            sink_config_.rtcp, *this, control_endpoint->outbound_writer(),
+            control_endpoint->outbound_composer(), packet_factory_, arena_, dumper_));
 
     const status::StatusCode code = rtcp_communicator_->init_status();
     if (code != status::StatusOK) {

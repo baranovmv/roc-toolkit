@@ -69,9 +69,9 @@ ReceiverSessionGroup::create_control_pipeline(ReceiverEndpoint* control_endpoint
     // We pass this as implementation of rtcp::IParticipant.
     // rtcp::Communicator will call our methods right now (in constructor)
     // and later when we call generate_packets() or process_packets().
-    rtcp_communicator_.reset(new (rtcp_communicator_) rtcp::Communicator(
-        source_config_.common.rtcp, *this, *control_endpoint->outbound_writer(),
-        *control_endpoint->outbound_composer(), packet_factory_, arena_));
+    rtcp_communicator_.reset(new(rtcp_communicator_) rtcp::Communicator(
+            source_config_.common.rtcp, *this, *control_endpoint->outbound_writer(),
+            *control_endpoint->outbound_composer(), packet_factory_, arena_, dumper_));
 
     const status::StatusCode code = rtcp_communicator_->init_status();
     if (code != status::StatusOK) {

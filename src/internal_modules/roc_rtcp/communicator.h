@@ -17,6 +17,7 @@
 #include "roc_core/rate_limiter.h"
 #include "roc_core/stddefs.h"
 #include "roc_core/time.h"
+#include "roc_dbgio/csv_dumper.h"
 #include "roc_packet/icomposer.h"
 #include "roc_packet/iwriter.h"
 #include "roc_packet/packet.h"
@@ -56,12 +57,9 @@ namespace rtcp {
 class Communicator : public core::NonCopyable<> {
 public:
     //! Initialize.
-    Communicator(const Config& config,
-                 IParticipant& participant,
-                 packet::IWriter& packet_writer,
-                 packet::IComposer& packet_composer,
-                 packet::PacketFactory& packet_factory,
-                 core::IArena& arena);
+    Communicator(const Config &config, IParticipant &participant, packet::IWriter &packet_writer,
+                 packet::IComposer &packet_composer, packet::PacketFactory &packet_factory,
+                 core::IArena &arena, dbgio::CsvDumper* dumper);
 
     //! Check if the object was successfully constructed.
     status::StatusCode init_status() const;
@@ -169,6 +167,8 @@ private:
     core::RateLimiter log_limiter_;
 
     status::StatusCode init_status_;
+
+    dbgio::CsvDumper* dumper_;
 };
 
 } // namespace rtcp

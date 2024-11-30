@@ -21,7 +21,7 @@
 namespace roc {
 namespace rtcp {
 
-Reporter::Reporter(const Config& config, IParticipant& participant, core::IArena& arena)
+Reporter::Reporter(const Config &config, IParticipant &participant, core::IArena &arena, dbgio::CsvDumper *dumper)
     : arena_(arena)
     , participant_(participant)
     , local_source_id_(0)
@@ -43,7 +43,8 @@ Reporter::Reporter(const Config& config, IParticipant& participant, core::IArena
     , report_time_(0)
     , config_(config)
     , max_delay_(packet::ntp_2_nanoseconds(header::MaxDelay))
-    , init_status_(status::NoStatus) {
+    , init_status_(status::NoStatus)
+    , dumper_(dumper) {
     memset(local_cname_, 0, sizeof(local_cname_));
 
     const ParticipantInfo part_info = participant_.participant_info();
@@ -1400,7 +1401,7 @@ Reporter::find_stream_(packet::stream_source_t source_id, CreateMode mode) {
                 (unsigned long)source_id);
 
         stream =
-            new (stream_pool_) Stream(stream_pool_, source_id, report_time_, config_.rtt);
+                new(stream_pool_) Stream(stream_pool_, source_id, report_time_, config_.rtt, dumper_);
         if (!stream) {
             report_error_ = status::StatusNoMem;
             return NULL;

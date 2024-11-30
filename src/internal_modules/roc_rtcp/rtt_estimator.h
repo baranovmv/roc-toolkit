@@ -14,6 +14,7 @@
 
 #include "roc_core/time.h"
 #include "roc_packet/units.h"
+#include "roc_dbgio/csv_dumper.h"
 
 namespace roc {
 namespace rtcp {
@@ -51,7 +52,7 @@ struct RttMetrics {
 class RttEstimator {
 public:
     //! Initialize.
-    RttEstimator(const RttConfig& config);
+    RttEstimator(const RttConfig &config, dbgio::CsvDumper *dumper);
 
     //! Check whether metrics are already available.
     bool has_metrics() const;
@@ -71,12 +72,17 @@ public:
                 core::nanoseconds_t local_reply_ts);
 
 private:
+    void dump_();
+
     const RttConfig config_;
     RttMetrics metrics_;
     bool has_metrics_;
 
     core::nanoseconds_t first_report_ts_;
     core::nanoseconds_t last_report_ts_;
+
+    dbgio::CsvDumper *dumper_;
+
 };
 
 } // namespace rtcp

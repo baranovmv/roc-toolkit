@@ -34,6 +34,7 @@
 #include "roc_rtcp/rtt_estimator.h"
 #include "roc_rtcp/sdes.h"
 #include "roc_status/status_code.h"
+#include "roc_dbgio/csv_dumper.h"
 
 namespace roc {
 namespace rtcp {
@@ -90,7 +91,7 @@ namespace rtcp {
 class Reporter : public core::NonCopyable<> {
 public:
     //! Initialize.
-    Reporter(const Config& config, IParticipant& participant, core::IArena& arena);
+    Reporter(const Config &config, IParticipant &participant, core::IArena &arena, dbgio::CsvDumper *dumper);
     ~Reporter();
 
     //! Check if the object was successfully constructed.
@@ -261,16 +262,14 @@ private:
     struct Stream : core::RefCounted<Stream, core::PoolAllocation>,
                     core::HashmapNode<>,
                     core::ListNode<> {
-        Stream(core::IPool& pool,
-               packet::stream_source_t source_id,
-               core::nanoseconds_t report_time,
-               const RttConfig& rtt_config)
+        Stream(core::IPool &pool, packet::stream_source_t source_id, core::nanoseconds_t report_time,
+               const RttConfig &rtt_config, dbgio::CsvDumper *dumper)
             : core::RefCounted<Stream, core::PoolAllocation>(pool)
             , source_id(source_id)
             , has_remote_recv_report(false)
-            , remote_recv_rtt(rtt_config)
+            , remote_recv_rtt(rtt_config, dumper)
             , has_remote_send_report(false)
-            , remote_send_rtt(rtt_config)
+            , remote_send_rtt(rtt_config, dumper)
             , local_recv_report(NULL)
             , last_update(report_time)
             , last_local_sr(0)
@@ -483,6 +482,8 @@ private:
     const core::nanoseconds_t max_delay_;
 
     status::StatusCode init_status_;
+
+    dbgio::CsvDumper* dumper_;
 };
 
 } // namespace rtcp

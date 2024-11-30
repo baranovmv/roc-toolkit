@@ -10,6 +10,7 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_core/time.h"
+#include "roc_dbgio/csv_dumper.h"
 #include "roc_packet/ntp.h"
 #include "roc_packet/units.h"
 #include "roc_rtcp/headers.h"
@@ -25,17 +26,14 @@ const core::nanoseconds_t LogInterval = core::Second * 30;
 
 } // namespace
 
-Communicator::Communicator(const Config& config,
-                           IParticipant& participant,
-                           packet::IWriter& packet_writer,
-                           packet::IComposer& packet_composer,
-                           packet::PacketFactory& packet_factory,
-                           core::IArena& arena)
+Communicator::Communicator(const Config &config, IParticipant &participant, packet::IWriter &packet_writer,
+                           packet::IComposer &packet_composer, packet::PacketFactory &packet_factory,
+                           core::IArena &arena, dbgio::CsvDumper* dumper)
     : packet_factory_(packet_factory)
     , packet_writer_(packet_writer)
     , packet_composer_(packet_composer)
     , config_(config)
-    , reporter_(config, participant, arena)
+    , reporter_(config, participant, arena, dumper)
     , next_deadline_(0)
     , dest_addr_count_(0)
     , dest_addr_index_(0)
@@ -50,7 +48,8 @@ Communicator::Communicator(const Config& config,
     , processed_packet_count_(0)
     , generated_packet_count_(0)
     , log_limiter_(LogInterval)
-    , init_status_(status::NoStatus) {
+    , init_status_(status::NoStatus)
+    , dumper_(dumper) {
     if ((init_status_ = reporter_.init_status()) != status::StatusOK) {
         return;
     }

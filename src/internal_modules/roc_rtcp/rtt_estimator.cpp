@@ -12,12 +12,13 @@
 namespace roc {
 namespace rtcp {
 
-RttEstimator::RttEstimator(const RttConfig& config)
+RttEstimator::RttEstimator(const RttConfig &config, dbgio::CsvDumper *dumper)
     : config_(config)
     , metrics_()
     , has_metrics_(false)
     , first_report_ts_(0)
-    , last_report_ts_(0) {
+    , last_report_ts_(0)
+    , dumper_(dumper) {
 }
 
 bool RttEstimator::has_metrics() const {
@@ -89,6 +90,20 @@ void RttEstimator::update(core::nanoseconds_t local_report_ts,
     metrics_.rtt = rtt;
 
     has_metrics_ = true;
+
+    if (dumper_) {
+        dump_();
+    }
+}
+
+void RttEstimator::dump_() {
+    dbgio::CsvEntry e;
+    e.type = 'r';
+    e.n_fields = 3;
+    e.fields[0] = core::timestamp(core::ClockUnix);
+    e.fields[1] = metrics_.rtt;
+    e.fields[2] = metrics_.clock_offset;
+    dumper_->write(e);
 }
 
 } // namespace rtcp
