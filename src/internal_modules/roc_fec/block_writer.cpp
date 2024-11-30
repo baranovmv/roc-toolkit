@@ -150,8 +150,8 @@ status::StatusCode BlockWriter::write(const packet::PacketPtr& pp) {
         if (!!pp->rtp()->padding.size()) {
             memcpy(pdest, pp->rtp()->padding.data(), pp->rtp()->padding.size());
         }
-        header.set_ssrc(((header.ssrc() ^ 0xFFFF0000) & 0xFFFF0000)
-                        | (pp->rtp()->overall_sz() & 0x0000FFFF));
+//        header.set_ssrc(((header.ssrc() ^ 0xFFFF0000) & 0xFFFF0000)
+//                        | (pp->rtp()->overall_sz() & 0x0000FFFF));
     }
 
     cur_packet_++;
@@ -268,7 +268,7 @@ status::StatusCode BlockWriter::write_source_packet_(const packet::PacketPtr& pp
     fill_packet_fec_fields_(pp, (packet::seqnum_t)cur_packet_);
 
     if (!source_composer_.compose(*pp)) {
-        // TODO(gh-183): forward status from composer
+        // TODO(gh-183): forward status from crepair_block_.size()omposer
         return status::StatusBadBuffer;
     }
     pp->add_flags(packet::Packet::FlagComposed);

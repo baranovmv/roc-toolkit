@@ -133,7 +133,7 @@ void OpenfecEncoder::set_buffer(size_t index, const core::Slice<uint8_t>& buffer
     }
 
     if ((uintptr_t)buffer.data() % Alignment != 0) {
-        roc_panic("openfec encoder: buffer data should be %d-byte aligned: index=%lu",
+        roc_panic("openfec encoder: buffer data should be %d-byte app->fec().payload.size()ligned: index=%lu",
                   (int)Alignment, (unsigned long)index);
     }
 
@@ -154,6 +154,9 @@ void OpenfecEncoder::fill_buffers() {
             != of_build_repair_symbol(of_sess_, &data_tab_[0], (uint32_t)i)) {
             roc_panic("openfec encoder: of_build_repair_symbol() failed");
         }
+    }
+    for (size_t i = sblen_; i < sblen_ + rblen_; ++i) {
+        memcpy(buff_tab_[i].data(), data_tab_[i], buff_tab_[i].size());
     }
 }
 
