@@ -15,6 +15,7 @@
 #include "roc_core/time.h"
 #include "roc_packet/units.h"
 #include "roc_dbgio/csv_dumper.h"
+#include "roc_stat/mov_aggregate.h"
 
 namespace roc {
 namespace rtcp {
@@ -52,7 +53,7 @@ struct RttMetrics {
 class RttEstimator {
 public:
     //! Initialize.
-    RttEstimator(const RttConfig &config, dbgio::CsvDumper *dumper);
+    RttEstimator(core::IArena &arena, const RttConfig &config, dbgio::CsvDumper *dumper);
 
     //! Check whether metrics are already available.
     bool has_metrics() const;
@@ -82,6 +83,26 @@ private:
     core::nanoseconds_t last_report_ts_;
 
     dbgio::CsvDumper *dumper_;
+
+    struct RttOffsetPair {
+        core::nanoseconds_t rtt;
+        core::nanoseconds_t offset;
+
+        RttOffsetPair() {
+            rtt = 10e9;
+        }
+
+        RttOffsetPair(const int64_t &r) {
+            rtt = r;
+            offset = 0;
+        }
+
+        operator int64_t() const {
+            return rtt;
+        }
+    };
+
+    stat::MovAggregate<RttOffsetPair> rtt_stats_;
 
 };
 

@@ -1401,7 +1401,7 @@ Reporter::find_stream_(packet::stream_source_t source_id, CreateMode mode) {
                 (unsigned long)source_id);
 
         stream =
-                new(stream_pool_) Stream(stream_pool_, source_id, report_time_, config_.rtt, dumper_);
+                new(stream_pool_) Stream(arena_, stream_pool_, source_id, report_time_, config_.rtt, dumper_);
         if (!stream) {
             report_error_ = status::StatusNoMem;
             return NULL;

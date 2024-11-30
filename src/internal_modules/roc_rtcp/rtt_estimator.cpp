@@ -12,13 +12,14 @@
 namespace roc {
 namespace rtcp {
 
-RttEstimator::RttEstimator(const RttConfig &config, dbgio::CsvDumper *dumper)
+RttEstimator::RttEstimator(core::IArena &arena, const RttConfig &config, dbgio::CsvDumper *dumper)
     : config_(config)
     , metrics_()
     , has_metrics_(false)
     , first_report_ts_(0)
     , last_report_ts_(0)
-    , dumper_(dumper) {
+    , dumper_(dumper)
+    , rtt_stats_(arena, 100){
 }
 
 bool RttEstimator::has_metrics() const {
@@ -86,8 +87,14 @@ void RttEstimator::update(core::nanoseconds_t local_report_ts,
     }
     last_report_ts_ = local_report_ts;
 
-    metrics_.clock_offset = clock_offset;
-    metrics_.rtt = rtt;
+    RttOffsetPair p;
+    p.rtt = rtt;
+    p.offset = clock_offset;
+    rtt_stats_.add(p);
+    RttOffsetPair min = rtt_stats_.mov_min();
+
+    metrics_.clock_offset = min.offset;
+    metrics_.rtt = min.rtt;
 
     has_metrics_ = true;
 

@@ -262,14 +262,15 @@ private:
     struct Stream : core::RefCounted<Stream, core::PoolAllocation>,
                     core::HashmapNode<>,
                     core::ListNode<> {
-        Stream(core::IPool &pool, packet::stream_source_t source_id, core::nanoseconds_t report_time,
+        Stream(core::IArena &arena, core::IPool &pool, packet::stream_source_t source_id,
+               core::nanoseconds_t report_time,
                const RttConfig &rtt_config, dbgio::CsvDumper *dumper)
             : core::RefCounted<Stream, core::PoolAllocation>(pool)
             , source_id(source_id)
             , has_remote_recv_report(false)
-            , remote_recv_rtt(rtt_config, dumper)
+            , remote_recv_rtt(arena, rtt_config, dumper)
             , has_remote_send_report(false)
-            , remote_send_rtt(rtt_config, dumper)
+            , remote_send_rtt(arena, rtt_config, dumper)
             , local_recv_report(NULL)
             , last_update(report_time)
             , last_local_sr(0)
