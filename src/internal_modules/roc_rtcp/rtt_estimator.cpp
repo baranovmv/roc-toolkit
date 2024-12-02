@@ -93,23 +93,30 @@ void RttEstimator::update(core::nanoseconds_t local_report_ts,
     rtt_stats_.add(p);
     RttOffsetPair min = rtt_stats_.mov_min();
 
-    metrics_.clock_offset = min.offset;
-    metrics_.rtt = min.rtt;
+    metrics_.clock_offset = clock_offset;
+    metrics_.rtt = rtt;
+//    metrics_.clock_offset = min.offset;
+//    metrics_.rtt = min.rtt;
 
     has_metrics_ = true;
 
     if (dumper_) {
-        dump_();
+        dump_(local_report_ts, remote_report_ts, remote_reply_ts, local_reply_ts);
     }
 }
 
-void RttEstimator::dump_() {
+void RttEstimator::dump_(core::nanoseconds_t local_report_ts, core::nanoseconds_t remote_report_ts,
+                         core::nanoseconds_t remote_reply_ts, core::nanoseconds_t local_reply_ts) {
     dbgio::CsvEntry e;
     e.type = 'r';
-    e.n_fields = 3;
+    e.n_fields = 7;
     e.fields[0] = core::timestamp(core::ClockUnix);
     e.fields[1] = metrics_.rtt;
     e.fields[2] = metrics_.clock_offset;
+    e.fields[3] = local_report_ts;
+    e.fields[4] = remote_report_ts;
+    e.fields[5] = remote_reply_ts;
+    e.fields[6] = local_reply_ts;
     dumper_->write(e);
 }
 

@@ -73,7 +73,8 @@ public:
                 core::nanoseconds_t local_reply_ts);
 
 private:
-    void dump_();
+    void dump_(core::nanoseconds_t local_report_ts, core::nanoseconds_t remote_report_ts,
+               core::nanoseconds_t remote_reply_ts, core::nanoseconds_t local_reply_ts);
 
     const RttConfig config_;
     RttMetrics metrics_;
