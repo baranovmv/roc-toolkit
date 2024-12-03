@@ -75,7 +75,6 @@ status::StatusCode Communicator::process_packet(const packet::PacketPtr& packet,
     roc_panic_if_msg(!packet, "rtcp communicator: null packet");
     roc_panic_if_msg(!packet->udp(), "rtcp communicator: non-udp packet");
     roc_panic_if_msg(!packet->rtcp(), "rtcp communicator: non-rtcp packet");
-    roc_panic_if_msg(current_time <= 0, "rtcp communicator: invalid timestamp");
 
     roc_log(LogTrace, "rtcp communicator: processing incoming packet");
 
@@ -89,7 +88,7 @@ status::StatusCode Communicator::process_packet(const packet::PacketPtr& packet,
     }
 
     status::StatusCode status =
-        reporter_.begin_processing(packet->udp()->src_addr, current_time);
+        reporter_.begin_processing(packet->udp()->src_addr, packet->udp()->receive_timestamp);
     roc_log(LogTrace, "rtcp communicator: begin_processing(): status=%s",
             status::code_to_str(status));
 
