@@ -57,6 +57,7 @@ bool Thread::enable_realtime() {
                 errno_to_str(err).c_str());
         return false;
     }
+    roc_log(LogDebug, "thread: set realtime priority");
 
     return true;
 }

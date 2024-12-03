@@ -93,10 +93,10 @@ void RttEstimator::update(core::nanoseconds_t local_report_ts,
     rtt_stats_.add(p);
     RttOffsetPair min = rtt_stats_.mov_min();
 
-    metrics_.clock_offset = clock_offset;
-    metrics_.rtt = rtt;
-//    metrics_.clock_offset = min.offset;
-//    metrics_.rtt = min.rtt;
+//    metrics_.clock_offset = clock_offset;
+//    metrics_.rtt = rtt;
+    metrics_.clock_offset = min.offset;
+    metrics_.rtt = min.rtt;
 
     has_metrics_ = true;
 

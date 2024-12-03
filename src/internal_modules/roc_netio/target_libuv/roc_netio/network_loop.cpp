@@ -140,6 +140,7 @@ NetworkLoop::NetworkLoop(core::IPool& packet_pool,
     task_sem_.data = this;
     task_sem_initialized_ = true;
 
+    enable_realtime();
     if (!(started_ = Thread::start())) {
         init_status_ = status::StatusErrThread;
         return;
