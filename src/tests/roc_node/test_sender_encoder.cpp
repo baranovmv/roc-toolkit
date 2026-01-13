@@ -65,15 +65,15 @@ TEST(sender_encoder, read_packet) {
     uint8_t packet[MaxBufSize] = {};
     size_t packet_size = sizeof(packet);
 
-    LONGS_EQUAL(
-        status::StatusBadInterface,
-        sender_encoder.read_packet(address::Iface_AudioSource, packet, &packet_size));
-    LONGS_EQUAL(
-        status::StatusBadInterface,
-        sender_encoder.read_packet(address::Iface_AudioRepair, packet, &packet_size));
-    LONGS_EQUAL(
-        status::StatusBadInterface,
-        sender_encoder.read_packet(address::Iface_AudioControl, packet, &packet_size));
+    LONGS_EQUAL(status::StatusBadInterface,
+                sender_encoder.read_packet(address::Iface_AudioSource, packet,
+                                           &packet_size, NULL));
+    LONGS_EQUAL(status::StatusBadInterface,
+                sender_encoder.read_packet(address::Iface_AudioRepair, packet,
+                                           &packet_size, NULL));
+    LONGS_EQUAL(status::StatusBadInterface,
+                sender_encoder.read_packet(address::Iface_AudioControl, packet,
+                                           &packet_size, NULL));
 }
 
 TEST(sender_encoder, write_packet) {

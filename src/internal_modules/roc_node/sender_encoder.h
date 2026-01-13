@@ -68,8 +68,14 @@ public:
     bool is_complete();
 
     //! Read encoded packet.
-    ROC_NODISCARD status::StatusCode
-    read_packet(address::Interface iface, void* bytes, size_t* n_bytes);
+    //! @param duration
+    //!  If not NULL, will be set to packet duration in nanoseconds.
+    //!  For non-audio packets, will be set to -1 (which becomes UINT64_MAX when
+    //!  cast to unsigned long long in public API).
+    ROC_NODISCARD status::StatusCode read_packet(address::Interface iface,
+                                                 void* bytes,
+                                                 size_t* n_bytes,
+                                                 core::nanoseconds_t* duration);
 
     //! Write packet for decoding.
     //! @note

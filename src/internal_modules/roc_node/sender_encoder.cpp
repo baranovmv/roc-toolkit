@@ -176,8 +176,10 @@ bool SenderEncoder::is_complete() {
     return slot_metrics.is_complete;
 }
 
-status::StatusCode
-SenderEncoder::read_packet(address::Interface iface, void* bytes, size_t* n_bytes) {
+status::StatusCode SenderEncoder::read_packet(address::Interface iface,
+                                              void* bytes,
+                                              size_t* n_bytes,
+                                              core::nanoseconds_t* duration) {
     roc_panic_if(init_status_ != status::StatusOK);
 
     roc_panic_if(iface < 0);
@@ -212,6 +214,23 @@ SenderEncoder::read_packet(address::Interface iface, void* bytes, size_t* n_byte
 
     memcpy(bytes, packet->buffer().data(), packet->buffer().size());
     *n_bytes = packet->buffer().size();
+
+    if (duration) {
+        // Default to -1 for non-audio packets
+        *duration = -1;
+        if (packet->has_flags(packet::Packet::FlagRTP | packet::Packet::FlagAudio)) {
+            const packet::stream_timestamp_t pkt_duration = packet->duration();
+
+            // Convert stream timestamps → nanoseconds using sample rate
+            if (sample_spec_.has_sample_rate() && sample_spec_.sample_rate() > 0) {
+                *duration = packet::stream_timestamp_2_ns(pkt_duration,
+                                                          sample_spec_.sample_rate());
+            } else {
+                // Can't convert without valid sample rate
+                *duration = -1;
+            }
+        }
+    }
 
     return status::StatusOK;
 }

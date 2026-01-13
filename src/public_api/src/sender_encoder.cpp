@@ -267,8 +267,10 @@ int roc_sender_encoder_pop_packet(roc_sender_encoder* encoder,
         return -1;
     }
 
-    const status::StatusCode code =
-        imp_encoder->read_packet(imp_iface, packet->bytes, &packet->bytes_size);
+    packet->duration = UINT64_MAX;
+    core::nanoseconds_t duration_ns = -1;
+    const status::StatusCode code = imp_encoder->read_packet(
+        imp_iface, packet->bytes, &packet->bytes_size, &duration_ns);
 
     if (code != status::StatusOK) {
         // TODO(gh-183): forward status code to user
@@ -279,6 +281,12 @@ int roc_sender_encoder_pop_packet(roc_sender_encoder* encoder,
                     status::code_to_str(code));
         }
         return -1;
+    }
+
+    if (duration_ns >= 0) {
+        packet->duration = (unsigned long long)duration_ns;
+    } else {
+        packet->duration = UINT64_MAX; // Not applicable
     }
 
     return 0;

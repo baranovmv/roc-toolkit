@@ -10,6 +10,7 @@
 
 #include "roc_core/macro_helpers.h"
 #include "roc_core/stddefs.h"
+#include "roc_core/time.h"
 
 #include "roc/config.h"
 #include "roc/sender_encoder.h"
@@ -347,6 +348,178 @@ TEST(sender_encoder, pop_packet_args) {
         CHECK(packet.bytes_size > 0);
         CHECK(packet.bytes_size < ROC_ARRAY_SIZE(bytes));
     }
+
+    LONGS_EQUAL(0, roc_sender_encoder_close(encoder));
+}
+
+TEST(sender_encoder, pop_packet_duration) {
+    roc_sender_encoder* encoder = NULL;
+    CHECK(roc_sender_encoder_open(context, &sender_config, &encoder) == 0);
+    CHECK(encoder);
+
+    CHECK(roc_sender_encoder_activate(encoder, ROC_INTERFACE_AUDIO_SOURCE, ROC_PROTO_RTP)
+          == 0);
+
+    // Push one frame with known size
+    const size_t samples_count = 8192;
+    float samples[samples_count] = {};
+    for (size_t i = 0; i < samples_count; i++) {
+        samples[i] = 0.5f;
+    }
+
+    roc_frame frame;
+    frame.samples = samples;
+    frame.samples_size = samples_count;
+    CHECK(roc_sender_encoder_push_frame(encoder, &frame) == 0);
+
+    // Pop packet and check duration
+    uint8_t bytes[8192] = {};
+    roc_packet packet;
+    packet.bytes = bytes;
+    packet.bytes_size = ROC_ARRAY_SIZE(bytes);
+    packet.duration = 0; // Initialize to zero
+
+    CHECK(roc_sender_encoder_pop_packet(encoder, ROC_INTERFACE_AUDIO_SOURCE, &packet)
+          == 0);
+
+    // Duration should be non-zero and not UINT64_MAX for audio packets
+    CHECK(packet.duration > 0);
+    CHECK(packet.duration != UINT64_MAX);
+
+    // Calculate expected duration based on packet encoding
+    // RTP header (no extensions, no CSRC) is 12 bytes
+    // L16 stereo: 2 bytes per sample, 2 channels
+    const size_t rtp_header_size = 12;
+    const size_t audio_payload = packet.bytes_size - rtp_header_size;
+    const size_t samples_per_channel = audio_payload / 4; // 2 bytes * 2 channels
+    const size_t sample_rate = 44100;
+    const core::nanoseconds_t expected_duration_ns =
+        (core::nanoseconds_t)samples_per_channel * core::Second
+        / (core::nanoseconds_t)sample_rate;
+
+    const core::nanoseconds_t tolerance = 10 * core::Nanosecond;
+    CHECK((core::nanoseconds_t)packet.duration >= expected_duration_ns - tolerance);
+    CHECK((core::nanoseconds_t)packet.duration <= expected_duration_ns + tolerance);
+
+    LONGS_EQUAL(0, roc_sender_encoder_close(encoder));
+}
+
+TEST(sender_encoder, pop_packet_duration_control) {
+    roc_sender_encoder* encoder = NULL;
+    CHECK(roc_sender_encoder_open(context, &sender_config, &encoder) == 0);
+    CHECK(encoder);
+
+    // Activate both audio and control interfaces
+    CHECK(roc_sender_encoder_activate(encoder, ROC_INTERFACE_AUDIO_SOURCE, ROC_PROTO_RTP)
+          == 0);
+    CHECK(
+        roc_sender_encoder_activate(encoder, ROC_INTERFACE_AUDIO_CONTROL, ROC_PROTO_RTCP)
+        == 0);
+
+    // Push frames to generate some packets
+    float samples[8192] = {};
+    roc_frame frame;
+    frame.samples = samples;
+    frame.samples_size = ROC_ARRAY_SIZE(samples);
+
+    // Push several frames to ensure control packets might be generated
+    for (int i = 0; i < 10; i++) {
+        CHECK(roc_sender_encoder_push_frame(encoder, &frame) == 0);
+    }
+
+    // Pop all audio packets
+    uint8_t bytes[8192] = {};
+    roc_packet packet;
+    packet.bytes = bytes;
+    packet.bytes_size = ROC_ARRAY_SIZE(bytes);
+
+    while (roc_sender_encoder_pop_packet(encoder, ROC_INTERFACE_AUDIO_SOURCE, &packet)
+           == 0) {
+        // Audio packets should have valid duration
+        CHECK(packet.duration != UINT64_MAX);
+        CHECK(packet.duration > 0);
+        packet.bytes_size = ROC_ARRAY_SIZE(bytes); // Reset for next iteration
+    }
+
+    // Try to pop control packet
+    packet.bytes_size = ROC_ARRAY_SIZE(bytes);
+    packet.duration = 12345; // Set to non-zero/non-UINT64_MAX value
+
+    int result =
+        roc_sender_encoder_pop_packet(encoder, ROC_INTERFACE_AUDIO_CONTROL, &packet);
+    LONGS_EQUAL(0, result);
+    // Control packets should have UINT64_MAX duration (not applicable)
+    UNSIGNED_LONGLONGS_EQUAL(UINT64_MAX, packet.duration);
+
+    LONGS_EQUAL(0, roc_sender_encoder_close(encoder));
+}
+
+TEST(sender_encoder, pop_packet_duration_multiple) {
+    roc_sender_encoder* encoder = NULL;
+    CHECK(roc_sender_encoder_open(context, &sender_config, &encoder) == 0);
+    CHECK(encoder);
+
+    CHECK(roc_sender_encoder_activate(encoder, ROC_INTERFACE_AUDIO_SOURCE, ROC_PROTO_RTP)
+          == 0);
+
+    // Push multiple frames to ensure multiple packets
+    const size_t frame_size = 8192;
+    float samples[frame_size] = {};
+    roc_frame frame;
+    frame.samples = samples;
+    frame.samples_size = frame_size;
+
+    // Push several frames
+    for (size_t i = 0; i < 5; i++) {
+        CHECK(roc_sender_encoder_push_frame(encoder, &frame) == 0);
+    }
+
+    uint8_t bytes[1099] = {};
+    roc_packet packet;
+    packet.bytes = bytes;
+    packet.bytes_size = ROC_ARRAY_SIZE(bytes);
+
+    core::nanoseconds_t total_duration = 0;
+    size_t packet_count = 0;
+
+    const size_t rtp_header_size = 12;
+    const size_t sample_rate = 44100;
+    const core::nanoseconds_t tolerance = 10 * core::Nanosecond;
+
+    // Pop all packets and validate their durations
+    while (true) {
+        packet.duration = 0;
+
+        if (roc_sender_encoder_pop_packet(encoder, ROC_INTERFACE_AUDIO_SOURCE, &packet)
+            != 0) {
+            break;
+        }
+
+        packet_count++;
+
+        CHECK(packet.duration > 0);
+        CHECK(packet.duration != UINT64_MAX);
+
+        const size_t audio_payload = packet.bytes_size - rtp_header_size;
+        const size_t samples_per_channel = audio_payload / 4; // L16 stereo: 2 bytes * 2
+                                                              // channels
+        const core::nanoseconds_t expected_duration =
+            (core::nanoseconds_t)samples_per_channel * core::Second
+            / (core::nanoseconds_t)sample_rate;
+
+        // Verify duration matches expected value within tolerance
+        const core::nanoseconds_t actual_duration = (core::nanoseconds_t)packet.duration;
+        CHECK(actual_duration >= expected_duration - tolerance);
+        CHECK(actual_duration <= expected_duration + tolerance);
+
+        total_duration += actual_duration;
+    }
+
+    // Should have multiple packets
+    CHECK(packet_count > 1);
+
+    // Total duration should be reasonable
+    CHECK(total_duration > 0);
 
     LONGS_EQUAL(0, roc_sender_encoder_close(encoder));
 }

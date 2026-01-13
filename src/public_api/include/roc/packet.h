@@ -36,6 +36,19 @@ typedef struct roc_packet {
     /** Packet bytes count.
      */
     size_t bytes_size;
+
+    /** Duration of packet payload in nanoseconds.
+     *
+     * For RTP packets with audio, represents the duration of audio samples
+     * contained in the packet, calculated from sample count and sample rate.
+     *
+     * For non-audio packets (e.g., RTCP control), this field is set to
+     * UINT64_MAX to indicate "not applicable".
+     *
+     * Only populated when reading packets via roc_sender_encoder_pop_packet().
+     * Ignored when writing packets.
+     */
+    unsigned long long duration;
 } roc_packet;
 
 #ifdef __cplusplus

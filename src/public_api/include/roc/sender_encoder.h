@@ -231,11 +231,16 @@ ROC_API int roc_sender_encoder_push_feedback_packet(roc_sender_encoder* encoder,
  * produce multiple packets, so the user should iteratively pop packets until error.
  * This should be repeated for all activated interfaces.
  *
+ * The returned packet includes a duration field (in nanoseconds) that indicates how
+ * long the audio samples in the packet will take to play. For non-audio packets
+ * (such as RTCP control packets), the duration field is set to UINT64_MAX to indicate
+ * "not applicable".
+ *
  * **Parameters**
  *  - \p encoder should point to an opened encoder
  *  - \p packet should point to an initialized packet; it should contain pointer to
- *    a buffer and it's size; packet bytes are copied to user's buffer and the
- *    size field is updated with the actual packet size
+ *    a buffer and its size; packet bytes are copied to user's buffer and the
+ *    size and duration fields are updated with the actual packet size and duration
  *
  * **Returns**
  *  - returns zero if a packet was successfully copied from encoder
