@@ -198,6 +198,10 @@ bool build_receiver_config(const gengetopt_args_info& args,
         receiver_config.session_defaults.latency.tuner_backend =
             audio::LatencyTunerBackend_Niq;
         break;
+    case latency_backend_arg_e2e:
+        receiver_config.session_defaults.latency.tuner_backend =
+            audio::LatencyTunerBackend_E2e;
+        break;
     default:
         break;
     }

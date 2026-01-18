@@ -552,10 +552,11 @@ void LatencyTuner::periodic_report_() {
 void LatencyTuner::dump_() {
     dbgio::CsvEntry e;
     e.type = 't';
-    e.n_fields = 3;
+    e.n_fields = 4;
     e.fields[0] = core::timestamp(core::ClockUnix);
     e.fields[1] = niq_latency_;
     e.fields[2] = cur_target_latency_;
+    e.fields[3] = e2e_latency_;
     dumper_->write(e);
 }
 
