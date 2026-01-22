@@ -4616,5 +4616,240 @@ TEST(receiver_source, pipeline_state) {
     }
 }
 
+// Test that clock_offset affects capture timestamp and e2e_latency computation.
+// This simulates a scenario where the sender's clock is shifted relative to the
+// receiver's clock.
+//
+// When sender's clock is ahead by clock_shift, the SR's NTP timestamp will be
+// larger than it would be in receiver's clock domain. Without clock_offset
+// compensation, the receiver will compute capture_ts values that are shifted
+// by clock_shift, leading to incorrect e2e_latency.
+TEST(receiver_source, clock_shift_e2e_latency) {
+    enum { MaxParties = 10 };
+
+    init_with_defaults();
+
+    // The simulated clock shift between sender and receiver.
+    // Positive means sender's clock is ahead of receiver's clock.
+    // clock_offset = sender_clock - receiver_clock = clock_shift
+    const core::nanoseconds_t clock_shift = core::Millisecond * 155;
+
+    // Virtual e2e latency for testing.
+    const core::nanoseconds_t virtual_e2e_latency = core::Millisecond * 555;
+
+    ReceiverSource receiver(make_default_config(), processor_map, encoding_map,
+                            packet_pool, packet_buffer_pool, frame_pool,
+                            frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, receiver.init_status());
+
+    ReceiverSlot* slot = create_slot(receiver);
+
+    packet::IWriter* transport_endpoint =
+        create_transport_endpoint(slot, address::Iface_AudioSource, proto1, dst_addr1);
+
+    packet::FifoQueue control_outbound_queue;
+    packet::IWriter* control_endpoint =
+        create_control_endpoint(slot, address::Iface_AudioControl, address::Proto_RTCP,
+                                dst_addr2, control_outbound_queue);
+
+    test::FrameReader frame_reader(receiver, frame_factory);
+
+    test::PacketWriter packet_writer(arena, *transport_endpoint, encoding_map,
+                                     packet_factory, src_id1, src_addr1, dst_addr1,
+                                     PayloadType_Ch2);
+
+    test::ControlWriter control_writer(*control_endpoint, packet_factory, src_addr1,
+                                       dst_addr2);
+    test::ControlReader control_reader(control_outbound_queue);
+
+    control_writer.set_local_source(src_id1);
+
+    // This is the capture timestamp in receiver's clock domain (ground truth).
+    const core::nanoseconds_t capture_ts_base_receiver = 1000000000000000LL;
+
+    // The sender's clock is ahead by clock_shift, so from sender's perspective,
+    // the capture timestamp is capture_ts_base_receiver + clock_shift.
+    const core::nanoseconds_t capture_ts_base_sender =
+        capture_ts_base_receiver + clock_shift;
+
+    const packet::stream_timestamp_t rtp_base = 1000000;
+
+    packet_writer.set_timestamp(rtp_base);
+
+    // Send initial packets to establish session.
+    packet_writer.write_packets(Latency / SamplesPerPacket, SamplesPerPacket,
+                                output_sample_spec);
+
+    // Track total samples read to compute RTP offset for playback timestamp.
+    size_t total_samples_read = 0;
+
+    // Flag to track if RTCP exchange is complete.
+    bool rtcp_exchange_complete = false;
+
+    // Counter for iterations after RTCP exchange completed.
+    size_t iterations_after_exchange = 0;
+
+    for (size_t np = 0; np < ManyPackets; np++) {
+        for (size_t nf = 0; nf < FramesPerPacket; nf++) {
+            refresh_source(receiver, frame_reader.refresh_ts(capture_ts_base_receiver));
+            frame_reader.read_nonzero_samples_no_cts_check(SamplesPerFrame,
+                                                           output_sample_spec);
+            total_samples_read += SamplesPerFrame;
+
+            // After SR is received, frames will have capture_ts from SR mapping.
+            // Use independent playback timestamp based on ground truth.
+            if (np >= 1 && frame_reader.last_capture_ts() > 0) {
+                // Compute RTP offset in nanoseconds from samples read.
+                // This is the offset from the base capture timestamp.
+                const core::nanoseconds_t rtp_offset_ns =
+                    output_sample_spec.samples_per_chan_2_ns(total_samples_read);
+
+                // Playback timestamp is ground truth capture time + RTP offset +
+                // virtual e2e latency.
+                const core::nanoseconds_t playback_ts =
+                    capture_ts_base_receiver + rtp_offset_ns + virtual_e2e_latency;
+
+                receiver.reclock(playback_ts);
+            }
+
+            UNSIGNED_LONGS_EQUAL(1, receiver.num_sessions());
+        }
+
+        packet_writer.write_packets(1, SamplesPerPacket, output_sample_spec);
+
+        // After first audio packets, send SR to provide timestamp mapping.
+        if (np == 0) {
+            control_writer.write_sender_report(packet::unix_2_ntp(capture_ts_base_sender),
+                                               rtp_base);
+        }
+
+        // After ReportInterval, complete the RTCP exchange to establish clock_offset.
+        // The receiver generates RR reports at ReportInterval, so wait for np > 10.
+        // 1. Read RR+RRTR that receiver generated
+        // 2. Send SR+DLRR to complete the exchange
+        if (np > (ReportInterval / SamplesPerPacket) && !rtcp_exchange_complete) {
+            // Read receiver's RR+RRTR from outbound queue.
+            if (control_outbound_queue.size() > 0) {
+                control_reader.read_report();
+
+                // Use 0 to match any XR packet SSRC (the XR SSRC is receiver's SSRC,
+                // not sender's).
+                packet::ntp_timestamp_t rrtr_ntp = control_reader.get_rrtr_ntp();
+                packet::stream_source_t receiver_ssrc =
+                    control_reader.get_receiver_ssrc();
+
+                if (rrtr_ntp != 0 && receiver_ssrc != 0) {
+                    // Simulate sender receiving RR and sending SR+DLRR.
+                    // To establish clock_offset = clock_shift, we need:
+                    //   clock_offset = ((T2-T1) + (T3-T4)) / 2
+                    // Where T2 and T3 are in sender's clock (shifted by clock_shift).
+                    //
+                    // The receiver internally records:
+                    //   T1 = LRR (when it sent RR) - in receiver's clock
+                    //   T4 = now (when it receives this SR) - in receiver's clock
+                    //
+                    // We provide (both in sender's clock domain):
+                    //   SR_NTP = T3 (when sender sent SR)
+                    //   DLRR.last_rr_ntp = rrtr_ntp (echoing T1)
+                    //   DLRR.delay = T3 - T2 (delay at sender)
+                    //
+                    // For simplicity, use DLRR delay = 0 (instant response at sender).
+                    // This means T2 = T3 (sender received RR and sent SR instantly).
+                    //
+                    // For clock_offset to equal clock_shift, we set:
+                    //   T3 = T1 + clock_shift (sender's clock = receiver's clock + shift)
+                    //
+                    // Convert RRTR (T1) from NTP to nanoseconds, add clock_shift.
+                    const core::nanoseconds_t rrtr_ns = packet::ntp_2_unix(rrtr_ntp);
+                    const core::nanoseconds_t sr_ts_sender = rrtr_ns + clock_shift;
+
+                    control_writer.write_sender_report_with_dlrr(
+                        packet::unix_2_ntp(sr_ts_sender), rtp_base, receiver_ssrc,
+                        rrtr_ntp,
+                        0 // DLRR delay = 0 (instant response)
+                    );
+
+                    // Force RTCP processing to handle SR2+DLRR.
+                    refresh_source(receiver,
+                                   frame_reader.refresh_ts(capture_ts_base_receiver));
+
+                    rtcp_exchange_complete = true;
+
+                    // Now send SR3 with the same capture_ts to apply the newly
+                    // established clock_offset to the mapping. The clock_offset
+                    // was computed from SR2+DLRR, but the mapping needs to be
+                    // updated with a new SR for the compensation to take effect.
+                    control_writer.write_sender_report(
+                        packet::unix_2_ntp(capture_ts_base_sender), rtp_base);
+
+                    // Force RTCP processing to handle SR3.
+                    refresh_source(receiver,
+                                   frame_reader.refresh_ts(capture_ts_base_receiver));
+                }
+            }
+        }
+
+        // Check e2e_latency after RTCP exchange completes.
+        // The e2e_latency depends on whether clock_offset compensation is applied.
+        //
+        // Since we're using ground truth playback_ts (based on capture_ts_base_receiver)
+        // but the frame's capture_ts comes from SR (in sender's clock domain):
+        //
+        // Without compensation (clock_offset=0 or disabled):
+        //   frame_capture_ts = capture_ts_base_sender + rtp_offset
+        //   e2e_latency = playback_ts - frame_capture_ts
+        //               = (capture_ts_base_receiver + rtp_offset + virtual_e2e_latency)
+        //               - (capture_ts_base_sender + rtp_offset)
+        //               = virtual_e2e_latency - clock_shift = 421ms
+        //
+        // With compensation (clock_offset = clock_shift):
+        //   frame_capture_ts = capture_ts_base_sender - clock_offset + rtp_offset
+        //                    = capture_ts_base_receiver + rtp_offset
+        //   e2e_latency = virtual_e2e_latency = 555ms
+        //
+        // Track iterations after RTCP exchange completed.
+        if (rtcp_exchange_complete) {
+            iterations_after_exchange++;
+        }
+
+        // Only check after a few iterations have passed since RTCP exchange.
+        // This ensures frames have been read with the updated mapping (SR3).
+        if (iterations_after_exchange > 5) {
+            ReceiverSlotMetrics slot_metrics;
+            ReceiverParticipantMetrics party_metrics[MaxParties];
+            size_t party_metrics_size = MaxParties;
+
+            slot->get_metrics(slot_metrics, party_metrics, &party_metrics_size);
+
+            CHECK(slot_metrics.source_id != 0);
+            UNSIGNED_LONGS_EQUAL(1, slot_metrics.num_participants);
+            UNSIGNED_LONGS_EQUAL(1, party_metrics_size);
+
+            // When clock_offset compensation is properly enabled and clock_offset
+            // is correctly established, e2e_latency should equal virtual_e2e_latency.
+            // When disabled or clock_offset is 0, e2e_latency will be off by clock_shift.
+            //
+            // This test expects the CORRECTED value, so it will:
+            // - FAIL when compensation is disabled (e2e_latency = 421ms)
+            // - PASS when compensation is enabled AND clock_offset is correct
+            const core::nanoseconds_t expected_e2e_latency = virtual_e2e_latency;
+
+            // Allow 5ms tolerance for timing variations.
+            DOUBLES_EQUAL(expected_e2e_latency, party_metrics[0].latency.e2e_latency,
+                          1 * core::Microsecond);
+        }
+
+        // Drain remaining outbound packets.
+        while (control_outbound_queue.size() > 0) {
+            packet::PacketPtr pp;
+            LONGS_EQUAL(status::StatusOK,
+                        control_outbound_queue.read(pp, packet::ModeFetch));
+        }
+    }
+
+    // Verify RTCP exchange completed.
+    CHECK(rtcp_exchange_complete);
+}
+
 } // namespace pipeline
 } // namespace roc

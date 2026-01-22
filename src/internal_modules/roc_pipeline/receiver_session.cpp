@@ -426,8 +426,12 @@ void ReceiverSession::process_report(const rtcp::SendReport& report) {
             == report.sender_source_id) {
         source_meter_->process_report(report);
 
-        timestamp_injector_->update_mapping(report.report_timestamp,
-                                            report.stream_timestamp);
+        core::nanoseconds_t local_report_ts = report.report_timestamp;
+        if (report.clock_offset != 0) {
+            local_report_ts -= report.clock_offset;
+        }
+
+        timestamp_injector_->update_mapping(local_report_ts, report.stream_timestamp);
     }
 }
 

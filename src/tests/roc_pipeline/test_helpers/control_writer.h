@@ -80,6 +80,66 @@ public:
         LONGS_EQUAL(status::StatusOK, writer_.write(new_packet_(buff)));
     }
 
+    // Write a sender report with XR DLRR block.
+    // This is used to simulate a sender responding to a receiver's RRTR
+    // so that the receiver can compute RTT and clock offset.
+    void write_sender_report_with_dlrr(packet::ntp_timestamp_t sr_ntp_ts,
+                                       packet::stream_timestamp_t rtp_ts,
+                                       packet::stream_source_t receiver_ssrc,
+                                       packet::ntp_timestamp_t last_rr_ntp,
+                                       packet::ntp_timestamp_t delay_last_rr) {
+        core::Slice<uint8_t> buff = packet_factory_.new_packet_buffer();
+        CHECK(buff);
+
+        buff.reslice(0, 0);
+
+        rtcp::Config cfg;
+        rtcp::Builder bld(cfg, buff);
+
+        // Build SR (Sender Report)
+        rtcp::header::SenderReportPacket sr;
+        sr.set_ssrc(local_source_);
+        sr.set_ntp_timestamp(sr_ntp_ts);
+        sr.set_rtp_timestamp(rtp_ts);
+
+        bld.begin_sr(sr);
+        bld.end_sr();
+
+        // Build XR with DLRR block
+        rtcp::header::XrPacket xr;
+        xr.set_ssrc(local_source_);
+
+        rtcp::header::XrDlrrBlock dlrr;
+
+        rtcp::header::XrDlrrSubblock dlrr_sub;
+        dlrr_sub.set_ssrc(receiver_ssrc);
+        dlrr_sub.set_last_rr(last_rr_ntp);
+        dlrr_sub.set_delay_last_rr(delay_last_rr);
+
+        bld.begin_xr(xr);
+        bld.begin_xr_dlrr(dlrr);
+        bld.add_xr_dlrr_report(dlrr_sub);
+        bld.end_xr_dlrr();
+        bld.end_xr();
+
+        // Build SDES
+        rtcp::SdesChunk chunk;
+        chunk.ssrc = local_source_;
+        rtcp::SdesItem item;
+        item.type = rtcp::header::SDES_CNAME;
+        item.text = cname_;
+
+        bld.begin_sdes();
+        bld.begin_sdes_chunk(chunk);
+        bld.add_sdes_item(item);
+        bld.end_sdes_chunk();
+        bld.end_sdes();
+
+        CHECK(bld.is_ok());
+
+        LONGS_EQUAL(status::StatusOK, writer_.write(new_packet_(buff)));
+    }
+
     void write_receiver_report(packet::ntp_timestamp_t ntp_ts,
                                const audio::SampleSpec& sample_spec) {
         core::Slice<uint8_t> buff = packet_factory_.new_packet_buffer();

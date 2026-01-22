@@ -341,6 +341,74 @@ public:
         return false;
     }
 
+    // Get RRTR NTP timestamp from current packet.
+    // Returns 0 if not found.
+    packet::ntp_timestamp_t get_rrtr_ntp(packet::stream_source_t from = 0) const {
+        CHECK(packet_);
+        CHECK(packet_->rtcp());
+
+        rtcp::Traverser traverser(packet_->rtcp()->payload);
+        CHECK(traverser.parse());
+
+        rtcp::Traverser::Iterator iter = traverser.iter();
+        rtcp::Traverser::Iterator::State state;
+
+        while ((state = iter.next()) != rtcp::Traverser::Iterator::END) {
+            switch (state) {
+            case rtcp::Traverser::Iterator::XR: {
+                rtcp::XrTraverser xr = iter.get_xr();
+                CHECK(xr.parse());
+
+                if (xr.packet().ssrc() == from || from == 0) {
+                    rtcp::XrTraverser::Iterator xr_iter = xr.iter();
+                    rtcp::XrTraverser::Iterator::Iterator::State xr_state;
+
+                    while ((xr_state = xr_iter.next())
+                           != rtcp::XrTraverser::Iterator::END) {
+                        switch (xr_state) {
+                        case rtcp::XrTraverser::Iterator::RRTR_BLOCK:
+                            return xr_iter.get_rrtr().ntp_timestamp();
+
+                        default:
+                            break;
+                        }
+                    }
+                }
+            } break;
+
+            default:
+                break;
+            }
+        }
+
+        return 0;
+    }
+
+    // Get SSRC of receiver from RR packet.
+    // Returns 0 if not found.
+    packet::stream_source_t get_receiver_ssrc() const {
+        CHECK(packet_);
+        CHECK(packet_->rtcp());
+
+        rtcp::Traverser traverser(packet_->rtcp()->payload);
+        CHECK(traverser.parse());
+
+        rtcp::Traverser::Iterator iter = traverser.iter();
+        rtcp::Traverser::Iterator::State state;
+
+        while ((state = iter.next()) != rtcp::Traverser::Iterator::END) {
+            switch (state) {
+            case rtcp::Traverser::Iterator::RR:
+                return iter.get_rr().ssrc();
+
+            default:
+                break;
+            }
+        }
+
+        return 0;
+    }
+
 private:
     packet::IReader& reader_;
     packet::PacketPtr packet_;

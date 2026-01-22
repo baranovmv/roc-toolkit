@@ -94,6 +94,34 @@ public:
     }
 
     // Read num_samples samples.
+    // Expect any non-zero values.
+    // Don't validate capture timestamp - just record it.
+    void read_nonzero_samples_no_cts_check(size_t num_samples,
+                                           const audio::SampleSpec& sample_spec) {
+        audio::FramePtr frame =
+            read_frame_(status::StatusOK, num_samples, sample_spec, audio::ModeHard);
+
+        check_duration_(*frame, num_samples, sample_spec);
+
+        // Don't check timestamp, just record it.
+        last_capture_ts_ = frame->capture_timestamp();
+
+        size_t non_zero = 0;
+        for (size_t ns = 0; ns < num_samples * sample_spec.num_channels(); ns++) {
+            if (frame->raw_samples()[ns] != 0) {
+                non_zero++;
+            }
+        }
+        CHECK(non_zero > 0);
+
+        sample_offset_ = uint8_t(sample_offset_ + num_samples);
+
+        // Advance offset but don't update base_cts_.
+        abs_offset_ += num_samples;
+        refresh_ts_offset_ = sample_spec.samples_per_chan_2_ns(abs_offset_);
+    }
+
+    // Read num_samples samples.
     // Expect all zero values.
     // If base_capture_ts is -1, expect zero CTS, otherwise expect
     // CTS = base_capture_ts + sample offset.
