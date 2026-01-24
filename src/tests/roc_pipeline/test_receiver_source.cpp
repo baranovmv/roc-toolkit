@@ -4689,6 +4689,11 @@ TEST(receiver_source, clock_shift_e2e_latency) {
     // Counter for iterations after RTCP exchange completed.
     size_t iterations_after_exchange = 0;
 
+    // Offset between total_samples_read and actual RTP offset.
+    // This accounts for initial latency trimming in the pipeline.
+    core::nanoseconds_t rtp_offset_correction = 0;
+    bool rtp_offset_correction_computed = false;
+
     for (size_t np = 0; np < ManyPackets; np++) {
         for (size_t nf = 0; nf < FramesPerPacket; nf++) {
             refresh_source(receiver, frame_reader.refresh_ts(capture_ts_base_receiver));
@@ -4699,10 +4704,28 @@ TEST(receiver_source, clock_shift_e2e_latency) {
             // After SR is received, frames will have capture_ts from SR mapping.
             // Use independent playback timestamp based on ground truth.
             if (np >= 1 && frame_reader.last_capture_ts() > 0) {
-                // Compute RTP offset in nanoseconds from samples read.
-                // This is the offset from the base capture timestamp.
+                // Compute the RTP offset correction BEFORE RTCP exchange, using
+                // frames from SR1 mapping. At this point clock_offset=0, so
+                // frame.capture_ts = capture_ts_base_sender + rtp_offset.
+                // This lets us determine the true RTP offset independently of
+                // clock_offset compensation.
+                if (!rtcp_exchange_complete && !rtp_offset_correction_computed) {
+                    // Compute true RTP offset from SR1 mapping:
+                    // frame.capture_ts = capture_ts_base_sender + rtp_offset * ns
+                    // rtp_offset = (frame.capture_ts - capture_ts_base_sender) / ns
+                    const core::nanoseconds_t frame_rtp_offset_ns =
+                        frame_reader.last_capture_ts() - capture_ts_base_sender;
+                    // The correction is difference between true RTP offset and
+                    // what total_samples_read gives us.
+                    rtp_offset_correction = frame_rtp_offset_ns
+                        - output_sample_spec.samples_per_chan_2_ns(total_samples_read);
+                    rtp_offset_correction_computed = true;
+                }
+
+                // Compute RTP offset in nanoseconds from samples read, with correction.
                 const core::nanoseconds_t rtp_offset_ns =
-                    output_sample_spec.samples_per_chan_2_ns(total_samples_read);
+                    output_sample_spec.samples_per_chan_2_ns(total_samples_read)
+                    + rtp_offset_correction;
 
                 // Playback timestamp is ground truth capture time + RTP offset +
                 // virtual e2e latency.
@@ -4753,15 +4776,40 @@ TEST(receiver_source, clock_shift_e2e_latency) {
                     //   DLRR.last_rr_ntp = rrtr_ntp (echoing T1)
                     //   DLRR.delay = T3 - T2 (delay at sender)
                     //
-                    // For simplicity, use DLRR delay = 0 (instant response at sender).
-                    // This means T2 = T3 (sender received RR and sent SR instantly).
+                    // For DLRR delay = 0 (T2 = T3), and for clock_offset to equal
+                    // clock_shift exactly, we need:
+                    //   clock_offset = ((T2-T1) + (T3-T4)) / 2 = clock_shift
+                    //   (T2-T1) + (T2-T4) = 2 * clock_shift  (since T2=T3)
+                    //   2*T2 = 2*clock_shift + T1 + T4
+                    //   T2 = clock_shift + (T1 + T4) / 2
                     //
-                    // For clock_offset to equal clock_shift, we set:
-                    //   T3 = T1 + clock_shift (sender's clock = receiver's clock + shift)
+                    // In other words, T2 should be at the midpoint of T1 and T4, plus
+                    // clock_shift to convert to sender's clock domain. This simulates
+                    // symmetric network delays (d1 = d2 = RTT/2).
                     //
-                    // Convert RRTR (T1) from NTP to nanoseconds, add clock_shift.
-                    const core::nanoseconds_t rrtr_ns = packet::ntp_2_unix(rrtr_ntp);
-                    const core::nanoseconds_t sr_ts_sender = rrtr_ns + clock_shift;
+                    // However, there's a complication: the receiver recovers T1 from
+                    // DLRR.last_rr using ntp_extend(), which only preserves the middle
+                    // 32 bits of NTP timestamp. The low 16 bits are lost (zeroed).
+                    // This means the receiver uses T1' = T1 - lost_bits where lost_bits
+                    // is the value of the low 16 bits.
+                    //
+                    // To get clock_offset = clock_shift exactly, we need to account for
+                    // this: instead of T1, use T1' in our calculation. We can compute
+                    // lost_bits from the original RRTR NTP timestamp.
+                    //
+                    // T1' = T1 with low 16 bits of NTP fractional part zeroed.
+                    // T4 = refresh_ts() which is the receiver's current time.
+                    //
+                    // Compute T1' by truncating low 16 bits from NTP.
+                    const packet::ntp_timestamp_t rrtr_ntp_truncated =
+                        rrtr_ntp & 0xFFFFFFFFFFFF0000ULL;
+                    const core::nanoseconds_t rrtr_ns_truncated =
+                        packet::ntp_2_unix(rrtr_ntp_truncated);
+
+                    const core::nanoseconds_t t4 =
+                        frame_reader.refresh_ts(capture_ts_base_receiver);
+                    const core::nanoseconds_t sr_ts_sender =
+                        clock_shift + (rrtr_ns_truncated + t4) / 2;
 
                     control_writer.write_sender_report_with_dlrr(
                         packet::unix_2_ntp(sr_ts_sender), rtp_base, receiver_ssrc,
@@ -4834,7 +4882,7 @@ TEST(receiver_source, clock_shift_e2e_latency) {
             // - PASS when compensation is enabled AND clock_offset is correct
             const core::nanoseconds_t expected_e2e_latency = virtual_e2e_latency;
 
-            // Allow 5ms tolerance for timing variations.
+            // Allow 1us tolerance for timing variations.
             DOUBLES_EQUAL(expected_e2e_latency, party_metrics[0].latency.e2e_latency,
                           1 * core::Microsecond);
         }

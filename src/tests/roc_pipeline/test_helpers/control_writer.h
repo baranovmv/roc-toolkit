@@ -142,6 +142,18 @@ public:
 
     void write_receiver_report(packet::ntp_timestamp_t ntp_ts,
                                const audio::SampleSpec& sample_spec) {
+        write_receiver_report_with_sr_ref(ntp_ts, ntp_ts, 0, sample_spec);
+    }
+
+    // Write a receiver report with separate RRTR and last_sr values.
+    // This is used to simulate proper RTCP exchange for clock_offset computation.
+    // - rrtr_ntp: RRTR timestamp (when receiver sent RR, in receiver's clock)
+    // - last_sr_ntp: Middle 32 bits of sender's SR NTP timestamp
+    // - delay_last_sr: Delay between receiving SR and sending RR (in 1/65536 sec units)
+    void write_receiver_report_with_sr_ref(packet::ntp_timestamp_t rrtr_ntp,
+                                           packet::ntp_timestamp_t last_sr_ntp,
+                                           packet::ntp_timestamp_t delay_last_sr,
+                                           const audio::SampleSpec& sample_spec) {
         core::Slice<uint8_t> buff = packet_factory_.new_packet_buffer();
         CHECK(buff);
 
@@ -158,14 +170,14 @@ public:
         rr_blk.set_cum_loss(link_metrics_.lost_packets);
         rr_blk.set_last_seqnum(link_metrics_.ext_last_seqnum);
         rr_blk.set_jitter(sample_spec.ns_2_stream_timestamp(link_metrics_.peak_jitter));
-        rr_blk.set_last_sr(ntp_ts);
-        rr_blk.set_delay_last_sr(0);
+        rr_blk.set_last_sr(last_sr_ntp);
+        rr_blk.set_delay_last_sr(delay_last_sr);
 
         rtcp::header::XrPacket xr;
         xr.set_ssrc(local_source_);
 
         rtcp::header::XrRrtrBlock rrtr;
-        rrtr.set_ntp_timestamp(ntp_ts);
+        rrtr.set_ntp_timestamp(rrtr_ntp);
 
         rtcp::header::XrMeasurementInfoBlock ms_info;
         ms_info.set_ssrc(remote_source_);

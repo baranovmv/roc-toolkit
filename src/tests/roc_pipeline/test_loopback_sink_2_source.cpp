@@ -587,8 +587,11 @@ void send_receive(int flags,
         write_samples(frame_writer, SamplesPerFrame, frame_format,
                       sender_config.input_sample_spec, send_base_cts);
 
-        LONGS_EQUAL(status::StatusOK,
-                    sender.refresh(frame_writer.refresh_ts(send_base_cts), NULL));
+        // Get sender's current timestamp for RTCP
+        const core::nanoseconds_t sender_refresh_ts =
+            frame_writer.refresh_ts(send_base_cts);
+
+        LONGS_EQUAL(status::StatusOK, sender.refresh(sender_refresh_ts, NULL));
 
         proxy.deliver_from(sender_outbound_queue);
 
@@ -598,8 +601,16 @@ void send_receive(int flags,
                 recv_base_cts = send_base_cts;
             }
 
-            LONGS_EQUAL(status::StatusOK,
-                        receiver.refresh(frame_reader.refresh_ts(recv_base_cts), NULL));
+            // When testing capture timestamps (FlagCTS), use sender's timestamp for
+            // receiver refresh to simulate synchronized clocks. This ensures clock_offset
+            // is 0 in loopback tests, so capture timestamps are preserved correctly.
+            // Without this, the latency between sender and receiver would cause non-zero
+            // clock_offset, incorrectly shifting capture timestamps.
+            const core::nanoseconds_t receiver_refresh_ts = (flags & FlagCTS)
+                ? sender_refresh_ts
+                : frame_reader.refresh_ts(recv_base_cts);
+
+            LONGS_EQUAL(status::StatusOK, receiver.refresh(receiver_refresh_ts, NULL));
 
             read_samples(frame_reader, SamplesPerFrame, num_sessions, frame_format,
                          receiver_config.common.output_sample_spec, recv_base_cts);

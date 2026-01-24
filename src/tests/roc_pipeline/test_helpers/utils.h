@@ -25,7 +25,11 @@ namespace {
 
 const double SampleEpsilon = 0.00001;
 
-const size_t TimestampEpsilonSmpls = 1;
+// Timestamp comparison tolerance in samples.
+// This tolerance accounts for timing variability in RTCP-based timestamp mapping,
+// where capture timestamps are derived from SR packets and may have small offsets
+// due to the asynchronous nature of RTCP exchange.
+const size_t TimestampEpsilonSmpls = 10;
 
 inline audio::sample_t nth_sample(uint8_t n) {
     return audio::sample_t(n) / 1024;

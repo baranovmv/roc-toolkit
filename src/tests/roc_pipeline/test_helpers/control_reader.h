@@ -409,6 +409,59 @@ public:
         return 0;
     }
 
+    // Get SSRC of sender from SR packet.
+    // Returns 0 if not found.
+    packet::stream_source_t get_sender_ssrc() const {
+        CHECK(packet_);
+        CHECK(packet_->rtcp());
+
+        rtcp::Traverser traverser(packet_->rtcp()->payload);
+        CHECK(traverser.parse());
+
+        rtcp::Traverser::Iterator iter = traverser.iter();
+        rtcp::Traverser::Iterator::State state;
+
+        while ((state = iter.next()) != rtcp::Traverser::Iterator::END) {
+            switch (state) {
+            case rtcp::Traverser::Iterator::SR:
+                return iter.get_sr().ssrc();
+
+            default:
+                break;
+            }
+        }
+
+        return 0;
+    }
+
+    // Get SR NTP timestamp from current packet.
+    // Returns 0 if not found.
+    packet::ntp_timestamp_t get_sr_ntp(packet::stream_source_t from = 0) const {
+        CHECK(packet_);
+        CHECK(packet_->rtcp());
+
+        rtcp::Traverser traverser(packet_->rtcp()->payload);
+        CHECK(traverser.parse());
+
+        rtcp::Traverser::Iterator iter = traverser.iter();
+        rtcp::Traverser::Iterator::State state;
+
+        while ((state = iter.next()) != rtcp::Traverser::Iterator::END) {
+            switch (state) {
+            case rtcp::Traverser::Iterator::SR:
+                if (iter.get_sr().ssrc() == from || from == 0) {
+                    return iter.get_sr().ntp_timestamp();
+                }
+                break;
+
+            default:
+                break;
+            }
+        }
+
+        return 0;
+    }
+
 private:
     packet::IReader& reader_;
     packet::PacketPtr packet_;

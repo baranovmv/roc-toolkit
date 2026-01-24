@@ -951,5 +951,223 @@ TEST(sender_sink, reports_two_receivers) {
     }
 }
 
+// Test that sender correctly compensates clock_offset when interpreting
+// receiver's report_timestamp. The feedback_capture_ts metric should
+// reflect when the receiver sent the report in sender's clock domain.
+//
+// When receiver's clock is ahead by clock_shift, the RR's RRTR timestamp will be
+// larger than it would be in sender's clock domain. Without clock_offset
+// compensation, the sender will compute feedback_capture_ts values that are shifted
+// by clock_shift, leading to incorrect values.
+TEST(sender_sink, clock_shift_feedback_timestamp) {
+    enum { MaxParties = 10 };
+
+    init_with_defaults();
+
+    // The simulated clock shift between sender and receiver.
+    // Positive means receiver's clock is ahead of sender's clock.
+    // clock_offset = receiver_clock - sender_clock = clock_shift
+    const core::nanoseconds_t clock_shift = core::Millisecond * 155;
+
+    packet::FifoQueue queue;
+
+    SenderSink sender(make_config(), processor_map, encoding_map, packet_pool,
+                      packet_buffer_pool, frame_pool, frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, sender.init_status());
+
+    SenderSlot* slot = create_slot(sender);
+    create_transport_endpoint(slot, address::Iface_AudioSource, proto, dst_addr1, queue);
+
+    packet::FifoQueue control_outbound_queue;
+    packet::IWriter* control_endpoint =
+        create_control_endpoint(slot, address::Iface_AudioControl, address::Proto_RTCP,
+                                dst_addr2, control_outbound_queue);
+
+    test::FrameWriter frame_writer(sender, frame_factory);
+    test::PacketReader packet_reader(arena, queue, encoding_map, packet_factory,
+                                     dst_addr1, PayloadType_Ch2);
+    test::ControlReader control_reader(control_outbound_queue);
+    test::ControlWriter control_writer(*control_endpoint, packet_factory, dst_addr1,
+                                       src_addr1);
+
+    // Base timestamp in sender's clock domain.
+    const core::nanoseconds_t unix_base_sender = 1000000000000000LL;
+
+    // Receiver's clock is ahead by clock_shift.
+    const core::nanoseconds_t unix_base_receiver = unix_base_sender + clock_shift;
+
+    // Write initial frames to start the sender.
+    for (size_t nf = 0; nf < ManyFrames; nf++) {
+        frame_writer.write_samples(SamplesPerFrame, input_sample_spec, unix_base_sender);
+        refresh_sink(sender, frame_writer.refresh_ts());
+    }
+
+    for (size_t np = 0; np < ManyFrames / FramesPerPacket; np++) {
+        packet_reader.read_packet(SamplesPerPacket, packet_sample_spec, unix_base_sender);
+    }
+
+    // Get sender's SSRC.
+    packet::stream_source_t send_src_id = 0;
+    {
+        SenderSlotMetrics slot_metrics;
+        slot->get_metrics(slot_metrics, NULL, NULL);
+        send_src_id = slot_metrics.source_id;
+    }
+    CHECK(send_src_id != 0);
+
+    packet::stream_source_t recv_src_id = send_src_id + 9999;
+
+    control_writer.set_local_source(recv_src_id);
+    control_writer.set_remote_source(send_src_id);
+
+    // Read sender's first SR to get its NTP timestamp.
+    CHECK(control_outbound_queue.size() > 0);
+    control_reader.read_report();
+    CHECK(control_reader.has_sr(send_src_id));
+
+    packet::ntp_timestamp_t sr1_ntp = control_reader.get_sr_ntp(send_src_id);
+    CHECK(sr1_ntp != 0);
+
+    // RTCP exchange to establish clock_offset.
+    //
+    // The clock_offset formula is: clock_offset = ((T2-T1) + (T3-T4)) / 2
+    // Where:
+    //   T1 = when sender sent SR (sender's clock)
+    //   T2 = when receiver received SR (receiver's clock)
+    //   T3 = when receiver sent RR (receiver's clock) = RRTR
+    //   T4 = when sender received RR (sender's clock)
+    //
+    // For symmetric delays (d = RTT/2) and instant processing at receiver (T2 = T3):
+    //   T2 = T1 + clock_shift + d  (receiver clock = sender clock + shift + delay)
+    //   T3 = T2 = T1 + clock_shift + d
+    //   T4 = T3 - clock_shift + d = T1 + 2d
+    //
+    // clock_offset = ((T2-T1) + (T3-T4)) / 2
+    //             = ((clock_shift + d) + (clock_shift - d)) / 2
+    //             = clock_shift
+    //
+    // For the test, we need to set RRTR = T3 = T1 + clock_shift + d
+    // where d = (T4 - T1) / 2.
+    //
+    // Rearranging: T3 = clock_shift + (T1 + T4) / 2
+
+    packet::LinkMetrics link_metrics;
+    link_metrics.ext_first_seqnum = 1;
+    link_metrics.ext_last_seqnum = 100;
+    link_metrics.expected_packets = 100;
+    link_metrics.lost_packets = 0;
+    link_metrics.peak_jitter = 0;
+
+    audio::LatencyMetrics latency_metrics;
+    latency_metrics.niq_latency = 0;
+    latency_metrics.niq_stalling = 0;
+    latency_metrics.e2e_latency = 0;
+
+    control_writer.set_link_metrics(link_metrics);
+    control_writer.set_latency_metrics(latency_metrics);
+
+    // Write more frames to advance sender's time.
+    for (size_t nf = 0; nf < FramesPerPacket; nf++) {
+        frame_writer.write_samples(SamplesPerFrame, input_sample_spec, unix_base_sender);
+        refresh_sink(sender, frame_writer.refresh_ts());
+    }
+
+    // Compute RRTR for symmetric delays using the formula:
+    //   RRTR = clock_shift + (T1 + T4) / 2
+    // where:
+    //   T1 = sender's SR timestamp (full precision, as used by RTT estimator)
+    //   T4 = when sender will process the RR
+    //
+    // T4 prediction: refresh_sink first writes a frame (advancing time by
+    // frame_duration), then processes control packets. So T4 = current_time +
+    // frame_duration.
+    const core::nanoseconds_t frame_duration =
+        (core::nanoseconds_t)SamplesPerFrame * core::Second / SampleRate;
+
+    // T1 is the full-precision SR timestamp (same value RTT estimator uses internally)
+    const core::nanoseconds_t t1_sr_ts = packet::ntp_2_unix(sr1_ntp);
+
+    // Current time before writing RR
+    const core::nanoseconds_t t_before_rr = frame_writer.refresh_ts();
+
+    // T4 will be after one frame (control packets processed after frame is written)
+    const core::nanoseconds_t t4_predicted = t_before_rr + frame_duration;
+
+    // RRTR = clock_shift + (T1 + T4) / 2
+    const core::nanoseconds_t rrtr1_ts = clock_shift + (t1_sr_ts + t4_predicted) / 2;
+    const packet::ntp_timestamp_t rrtr1_ntp = packet::unix_2_ntp(rrtr1_ts);
+
+    // Send RR1+RRTR1 from receiver.
+    // last_sr = sender's SR NTP, rrtr = receiver's timestamp, delay = 0.
+    control_writer.write_receiver_report_with_sr_ref(rrtr1_ntp, sr1_ntp, 0,
+                                                     packet_sample_spec);
+
+    // Process the RR by writing more frames.
+    for (size_t nf = 0; nf < FramesPerPacket * 3; nf++) {
+        frame_writer.write_samples(SamplesPerFrame, input_sample_spec, unix_base_sender);
+        refresh_sink(sender, frame_writer.refresh_ts());
+    }
+
+    // Drain control outbound queue (sender's SR+DLRR response).
+    while (control_outbound_queue.size() > 0) {
+        control_reader.read_report();
+    }
+
+    // Send another RR with a known timestamp to test clock_offset compensation.
+    // This timestamp should be converted to sender's clock domain.
+    const core::nanoseconds_t test_report_ts_receiver =
+        unix_base_receiver + core::Second; // 1 second after base in receiver's clock
+    const packet::ntp_timestamp_t test_report_ntp =
+        packet::unix_2_ntp(test_report_ts_receiver);
+
+    // Use the same last_sr as before (sender's SR is still the reference).
+    control_writer.write_receiver_report_with_sr_ref(test_report_ntp, sr1_ntp, 0,
+                                                     packet_sample_spec);
+
+    // Process the RR by writing more frames.
+    for (size_t nf = 0; nf < FramesPerPacket * 3; nf++) {
+        frame_writer.write_samples(SamplesPerFrame, input_sample_spec, unix_base_sender);
+        refresh_sink(sender, frame_writer.refresh_ts());
+    }
+
+    // Query sender metrics and verify feedback_capture_ts.
+    {
+        SenderSlotMetrics slot_metrics;
+        SenderParticipantMetrics party_metrics[MaxParties];
+        size_t party_metrics_size = MaxParties;
+
+        slot->get_metrics(slot_metrics, party_metrics, &party_metrics_size);
+
+        CHECK(slot_metrics.source_id == send_src_id);
+        UNSIGNED_LONGS_EQUAL(1, slot_metrics.num_participants);
+        UNSIGNED_LONGS_EQUAL(1, party_metrics_size);
+
+        // The expected feedback_capture_ts should be the receiver's report_timestamp
+        // converted to sender's clock domain by subtracting clock_offset.
+        //
+        // If compensation is correct:
+        //   feedback_capture_ts = test_report_ts_receiver - clock_offset
+        //                       = test_report_ts_receiver - clock_shift
+        //                       = unix_base_sender + 1 second
+        //
+        // If compensation is disabled (clock_offset = 0):
+        //   feedback_capture_ts = test_report_ts_receiver (WRONG)
+        //                       = unix_base_sender + clock_shift + 1 second
+        //
+        // The difference is clock_shift (155ms).
+        const core::nanoseconds_t expected_feedback_ts = unix_base_sender + core::Second;
+
+        // Tolerance accounts for RTCP protocol precision limits (NTP conversion,
+        // timestamp reconstruction from truncated last_sr field).
+        // Current observed error is ~7µs due to these protocol artifacts.
+        // This tolerance still definitively catches the bug if compensation is
+        // disabled (would be off by clock_shift = 155ms).
+        const core::nanoseconds_t tolerance = 20 * core::Microsecond;
+        DOUBLES_EQUAL((double)expected_feedback_ts,
+                      (double)party_metrics[0].latency.feedback_capture_ts,
+                      (double)tolerance);
+    }
+}
+
 } // namespace pipeline
 } // namespace roc

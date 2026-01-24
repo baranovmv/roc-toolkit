@@ -398,6 +398,14 @@ SenderSession::notify_send_stream(packet::stream_source_t recv_source_id,
         latency_metrics.niq_stalling = recv_report.niq_stalling;
         latency_metrics.e2e_latency = recv_report.e2e_latency;
 
+        // Convert receiver's report timestamp to sender's clock domain.
+        // This is analogous to receiver-side compensation in receiver_session.cpp.
+        core::nanoseconds_t local_report_ts = recv_report.report_timestamp;
+        if (recv_report.clock_offset != 0) {
+            local_report_ts -= recv_report.clock_offset;
+        }
+        latency_metrics.feedback_capture_ts = local_report_ts;
+
         packet::LinkMetrics link_metrics;
         link_metrics.ext_first_seqnum = recv_report.ext_first_seqnum;
         link_metrics.ext_last_seqnum = recv_report.ext_last_seqnum;

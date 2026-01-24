@@ -208,11 +208,18 @@ struct LatencyMetrics {
     //! Total duration of packets within one FEC block.
     core::nanoseconds_t fec_block_duration;
 
+    //! Timestamp when remote party generated this feedback report.
+    //! Converted to local clock domain using clock_offset compensation.
+    //! On sender side, this is receiver's report_timestamp adjusted by clock_offset.
+    //! Zero if not yet available.
+    core::nanoseconds_t feedback_capture_ts;
+
     LatencyMetrics()
         : niq_latency(0)
         , niq_stalling(0)
         , e2e_latency(0)
-        , fec_block_duration(0) {
+        , fec_block_duration(0)
+        , feedback_capture_ts(0) {
     }
 };
 
