@@ -7,6 +7,7 @@
  */
 
 #include "roc_pipeline/receiver_session.h"
+#include "roc_audio/sample_spec_to_str.h"
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_fec/codec_map.h"
@@ -35,6 +36,10 @@ ReceiverSession::ReceiverSession(const ReceiverSessionConfig& session_config,
                 (unsigned)session_config.payload_type);
         init_status_ = status::StatusNoRoute;
         return;
+    } else {
+        roc::audio::sample_spec_to_str sspec(pkt_encoding->sample_spec);
+        roc_log(LogInfo, "receiver session: payload type: %u, pkt_encoding: %s",
+                pkt_encoding->payload_type, sspec.c_str());
     }
 
     packet_router_.reset(new (packet_router_) packet::Router(arena));

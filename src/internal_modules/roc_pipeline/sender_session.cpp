@@ -7,6 +7,7 @@
  */
 
 #include "roc_pipeline/sender_session.h"
+#include "roc_audio/sample_spec_to_str.h"
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_fec/codec_map.h"
@@ -60,6 +61,10 @@ SenderSession::create_transport_pipeline(SenderEndpoint* source_endpoint,
                 "sender session: can't find registered encoding for payload id %u",
                 (unsigned)sink_config_.payload_type);
         return status::StatusBadConfig;
+    } else {
+        roc::audio::sample_spec_to_str sspec(pkt_encoding->sample_spec);
+        roc_log(LogInfo, "sender session: payload type: %u, pkt_encoding: %s",
+                pkt_encoding->payload_type, sspec.c_str());
     }
 
     // First part of pipeline: chained packet writers from packetizer to endpoint.
