@@ -13,6 +13,7 @@
 #include "roc_core/shared_ptr.h"
 #include "roc_core/string_builder.h"
 #include "roc_core/time.h"
+#include "roc_dbgio/csv_dumper.h"
 #include "roc_netio/socket_ops.h"
 #include "roc_status/code_to_str.h"
 
@@ -372,6 +373,14 @@ void UdpPort::write_sem_cb_(uv_async_t* handle) {
 
         udp.request.data = &self;
 
+        if (dbgio::CsvDumper::instance() && pp->has_flags(packet::Packet::FlagRTP)) {
+          dbgio::CsvEntry e;
+          e.type = 'z';
+          e.n_fields = 2;
+          e.fields[0] = core::timestamp(core::ClockUnix);
+          e.fields[1] = pp->rtp()->payload.size();
+          dbgio::CsvDumper::instance()->write(e);
+        }
         if (int err = uv_udp_send(&udp.request, &self.handle_, &buf, 1,
                                   udp.dst_addr.saddr(), send_cb_)) {
             roc_log(LogError, "udp port: %s: uv_udp_send(): [%s] %s", self.descriptor(),
@@ -443,6 +452,14 @@ status::StatusCode UdpPort::write(const packet::PacketPtr& pp) {
 void UdpPort::write_(const packet::PacketPtr& pp) {
     const bool had_pending = (++pending_packets_ > 1);
     if (!had_pending) {
+        if (dbgio::CsvDumper::instance() && pp->has_flags(packet::Packet::FlagRTP)) {
+          dbgio::CsvEntry e;
+          e.type = 'u';
+          e.n_fields = 2;
+          e.fields[0] = core::timestamp(core::ClockUnix);
+          e.fields[1] = pp->rtp()->payload.size();
+          dbgio::CsvDumper::instance()->write(e);
+        }
         if (try_nonblocking_write_(pp)) {
             --pending_packets_;
             return;
@@ -460,6 +477,14 @@ void UdpPort::write_(const packet::PacketPtr& pp) {
 bool UdpPort::try_nonblocking_write_(const packet::PacketPtr& pp) {
     if (!config_.enable_non_blocking) {
         return false;
+    }
+    if (dbgio::CsvDumper::instance() && pp->has_flags(packet::Packet::FlagRTP)) {
+      dbgio::CsvEntry e;
+      e.type = 'x';
+      e.n_fields = 2;
+      e.fields[0] = core::timestamp(core::ClockUnix);
+      e.fields[1] = pp->rtp()->payload.size();
+      dbgio::CsvDumper::instance()->write(e);
     }
 
     const packet::UDP& udp = *pp->udp();

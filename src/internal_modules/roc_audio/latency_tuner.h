@@ -18,10 +18,10 @@
 #include "roc_core/noncopyable.h"
 #include "roc_core/optional.h"
 #include "roc_core/time.h"
-#include "roc_dbgio/csv_dumper.h"
 #include "roc_packet/ilink_meter.h"
 #include "roc_packet/units.h"
 #include "roc_status/status_code.h"
+#include "roc_core/rate_limiter.h"
 
 namespace roc {
 namespace audio {
