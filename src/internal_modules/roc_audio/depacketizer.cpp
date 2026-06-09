@@ -11,6 +11,7 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_core/stddefs.h"
+#include "roc_dbgio/csv_dumper.h"
 #include "roc_status/code_to_str.h"
 
 namespace roc {
@@ -25,8 +26,7 @@ const core::nanoseconds_t LogInterval = 30 * core::Second;
 Depacketizer::Depacketizer(packet::IReader& packet_reader,
                            IFrameDecoder& payload_decoder,
                            FrameFactory& frame_factory,
-                           const SampleSpec& sample_spec,
-                           dbgio::CsvDumper* dumper)
+                           const SampleSpec& sample_spec)
     : frame_factory_(frame_factory)
     , packet_reader_(packet_reader)
     , payload_decoder_(payload_decoder)
@@ -40,7 +40,6 @@ Depacketizer::Depacketizer(packet::IReader& packet_reader,
     , recovered_samples_(0)
     , is_started_(false)
     , rate_limiter_(LogInterval, 1)
-    , dumper_(dumper)
     , init_status_(status::NoStatus) {
     roc_panic_if_msg(!sample_spec_.is_complete() || !sample_spec_.is_raw(),
                      "depacketizer: required complete sample spec with raw format: %s",
@@ -134,7 +133,7 @@ status::StatusCode Depacketizer::read(Frame& frame,
     commit_frame_(frame, frame_samples, frame_stats);
 
     periodic_report_();
-    if (dumper_) {
+    if (dbgio::CsvDumper::instance()) {
         dump_();
     }
 
@@ -592,7 +591,7 @@ void Depacketizer::dump_() {
     e.fields[2] = metrics_.late_samples;
     e.fields[3] = metrics_.recovered_samples;
 
-    dumper_->write(e);
+    dbgio::CsvDumper::instance()->write(e);
 }
 
 } // namespace audio

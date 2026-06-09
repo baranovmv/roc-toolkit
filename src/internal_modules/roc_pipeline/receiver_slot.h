@@ -20,7 +20,6 @@
 #include "roc_core/iarena.h"
 #include "roc_core/list_node.h"
 #include "roc_core/ref_counted.h"
-#include "roc_dbgio/csv_dumper.h"
 #include "roc_packet/packet_factory.h"
 #include "roc_pipeline/metrics.h"
 #include "roc_pipeline/receiver_endpoint.h"
@@ -48,8 +47,7 @@ public:
                  rtp::EncodingMap& encoding_map,
                  packet::PacketFactory& packet_factory,
                  audio::FrameFactory& frame_factory,
-                 core::IArena& arena,
-                 dbgio::CsvDumper* dumper);
+                 core::IArena& arena);
 
     //! Check if the pipeline was successfully constructed.
     status::StatusCode init_status() const;

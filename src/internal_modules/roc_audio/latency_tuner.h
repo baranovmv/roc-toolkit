@@ -50,8 +50,7 @@ public:
     //! Initialize.
     LatencyTuner(const LatencyConfig& latency_config,
                  const FreqEstimatorConfig& fe_config,
-                 const SampleSpec& sample_spec,
-                 dbgio::CsvDumper* dumper);
+                 const SampleSpec& sample_spec);
 
     //! Check if the object was successfully constructed.
     status::StatusCode init_status() const;
@@ -174,8 +173,6 @@ private:
     const float lat_update_inc_step_;
 
     core::RateLimiter last_lat_limiter_;
-
-    dbgio::CsvDumper* dumper_;
 
     status::StatusCode init_status_;
 };

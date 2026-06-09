@@ -14,6 +14,8 @@
 namespace roc {
 namespace dbgio {
 
+CsvDumper* CsvDumper::CsvDumper::dumper_ = NULL;
+
 CsvDumper::CsvDumper(const CsvConfig& config, core::IArena& arena)
     : config_(config)
     , open_flag_(false)

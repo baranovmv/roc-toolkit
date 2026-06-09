@@ -19,8 +19,7 @@ SenderSession::SenderSession(const SenderSinkConfig& sink_config,
                              rtp::EncodingMap& encoding_map,
                              packet::PacketFactory& packet_factory,
                              audio::FrameFactory& frame_factory,
-                             core::IArena& arena,
-                             dbgio::CsvDumper* dumper)
+                             core::IArena& arena)
     : arena_(arena)
     , sink_config_(sink_config)
     , processor_map_(processor_map)
@@ -28,7 +27,6 @@ SenderSession::SenderSession(const SenderSinkConfig& sink_config,
     , packet_factory_(packet_factory)
     , frame_factory_(frame_factory)
     , frame_writer_(NULL)
-    , dumper_(dumper)
     , init_status_(status::NoStatus)
     , fail_status_(status::NoStatus) {
     identity_.reset(new (identity_) rtp::Identity());
@@ -211,7 +209,7 @@ SenderSession::create_transport_pipeline(SenderEndpoint* source_endpoint,
 
         feedback_monitor_.reset(new (feedback_monitor_) audio::FeedbackMonitor(
             *frm_writer, *packetizer_, resampler_writer_.get(), sink_config_.feedback,
-            sink_config_.latency, sink_config_.freq_est, inout_spec, dumper_));
+            sink_config_.latency, sink_config_.freq_est, inout_spec));
         if ((status = feedback_monitor_->init_status()) != status::StatusOK) {
             return status;
         }

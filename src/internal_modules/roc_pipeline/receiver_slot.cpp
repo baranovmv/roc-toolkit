@@ -21,8 +21,7 @@ ReceiverSlot::ReceiverSlot(const ReceiverSourceConfig& source_config,
                            rtp::EncodingMap& encoding_map,
                            packet::PacketFactory& packet_factory,
                            audio::FrameFactory& frame_factory,
-                           core::IArena& arena,
-                           dbgio::CsvDumper* dumper)
+                           core::IArena& arena)
     : core::RefCounted<ReceiverSlot, core::ArenaAllocation>(arena)
     , encoding_map_(encoding_map)
     , state_tracker_(state_tracker)
@@ -34,8 +33,7 @@ ReceiverSlot::ReceiverSlot(const ReceiverSourceConfig& source_config,
                      encoding_map,
                      packet_factory,
                      frame_factory,
-                     arena,
-                     dumper)
+                     arena)
     , init_status_(status::NoStatus) {
     roc_log(LogDebug, "receiver slot: initializing");
 

@@ -22,7 +22,6 @@
 #include "roc_core/noncopyable.h"
 #include "roc_core/optional.h"
 #include "roc_core/time.h"
-#include "roc_dbgio/csv_dumper.h"
 #include "roc_fec/block_reader.h"
 #include "roc_packet/sorted_queue.h"
 #include "roc_packet/units.h"
@@ -70,8 +69,7 @@ public:
                    const LatencyConfig& latency_config,
                    const FreqEstimatorConfig& fe_config,
                    const SampleSpec& packet_sample_spec,
-                   const SampleSpec& frame_sample_spec,
-                   dbgio::CsvDumper* dumper);
+                   const SampleSpec& frame_sample_spec);
 
     //! Check if the object was successfully constructed.
     status::StatusCode init_status() const;

@@ -8,6 +8,7 @@
 
 #include "roc_rtp/link_meter.h"
 #include "roc_core/panic.h"
+#include "roc_dbgio/csv_dumper.h"
 #include "roc_packet/units.h"
 
 namespace roc {
@@ -16,8 +17,7 @@ namespace rtp {
 LinkMeter::LinkMeter(packet::IWriter& writer,
                      const audio::JitterMeterConfig& jitter_config,
                      const EncodingMap& encoding_map,
-                     core::IArena& arena,
-                     dbgio::CsvDumper* dumper)
+                     core::IArena& arena)
     : encoding_map_(encoding_map)
     , encoding_(NULL)
     , writer_(writer)
@@ -29,8 +29,7 @@ LinkMeter::LinkMeter(packet::IWriter& writer,
     , processed_packets_(0)
     , prev_queue_timestamp_(-1)
     , prev_stream_timestamp_(0)
-    , jitter_meter_(jitter_config, arena)
-    , dumper_(dumper) {
+    , jitter_meter_(jitter_config, arena) {
 }
 
 status::StatusCode LinkMeter::init_status() const {
@@ -103,7 +102,7 @@ void LinkMeter::update_metrics_(const packet::Packet& packet) {
     first_packet_ = false;
     has_metrics_ = true;
 
-    if (dumper_) {
+    if (dbgio::CsvDumper::instance()) {
         dump_(packet);
     }
 }
@@ -172,7 +171,7 @@ void LinkMeter::dump_(const packet::Packet& packet) {
     e.fields[3] = jit_metrics.peak_jitter;
     e.fields[4] = jit_metrics.curr_envelope;
 
-    dumper_->write(e);
+    dbgio::CsvDumper::instance()->write(e);
 }
 
 } // namespace rtp

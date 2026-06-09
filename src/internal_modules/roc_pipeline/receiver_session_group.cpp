@@ -23,8 +23,7 @@ ReceiverSessionGroup::ReceiverSessionGroup(const ReceiverSourceConfig& source_co
                                            rtp::EncodingMap& encoding_map,
                                            packet::PacketFactory& packet_factory,
                                            audio::FrameFactory& frame_factory,
-                                           core::IArena& arena,
-                                           dbgio::CsvDumper* dumper)
+                                           core::IArena& arena)
     : source_config_(source_config)
     , slot_config_(slot_config)
     , state_tracker_(state_tracker)
@@ -35,7 +34,6 @@ ReceiverSessionGroup::ReceiverSessionGroup(const ReceiverSourceConfig& source_co
     , packet_factory_(packet_factory)
     , frame_factory_(frame_factory)
     , session_router_(arena)
-    , dumper_(dumper)
     , init_status_(status::NoStatus) {
     identity_.reset(new (identity_) rtp::Identity());
     if ((init_status_ = identity_->init_status()) != status::StatusOK) {
@@ -391,7 +389,7 @@ ReceiverSessionGroup::create_session_(const packet::PacketPtr& packet) {
 
     core::SharedPtr<ReceiverSession> sess = new (arena_)
         ReceiverSession(sess_config, source_config_.common, processor_map_, encoding_map_,
-                        packet_factory_, frame_factory_, arena_, dumper_);
+                        packet_factory_, frame_factory_, arena_);
 
     if (!sess) {
         roc_log(LogError, "session group: can't create session, allocation failed");

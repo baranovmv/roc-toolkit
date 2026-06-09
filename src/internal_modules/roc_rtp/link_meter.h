@@ -17,7 +17,6 @@
 #include "roc_core/iarena.h"
 #include "roc_core/noncopyable.h"
 #include "roc_core/time.h"
-#include "roc_dbgio/csv_dumper.h"
 #include "roc_packet/ilink_meter.h"
 #include "roc_packet/iwriter.h"
 #include "roc_rtcp/reports.h"
@@ -42,8 +41,7 @@ public:
     LinkMeter(packet::IWriter& writer,
               const audio::JitterMeterConfig& jitter_config,
               const EncodingMap& encoding_map,
-              core::IArena& arena,
-              dbgio::CsvDumper* dumper);
+              core::IArena& arena);
 
     //! Check if the object was successfully constructed.
     status::StatusCode init_status() const;
@@ -99,8 +97,6 @@ private:
     packet::stream_timestamp_t prev_stream_timestamp_;
 
     audio::JitterMeter jitter_meter_;
-
-    dbgio::CsvDumper* dumper_;
 };
 
 } // namespace rtp

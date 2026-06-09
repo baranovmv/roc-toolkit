@@ -42,6 +42,7 @@ SenderSink::SenderSink(const SenderSinkConfig& sink_config,
         if ((init_status_ = dumper_->open()) != status::StatusOK) {
             return;
         }
+        dbgio::CsvDumper::enable(dumper_.get());
     }
 
     audio::IFrameWriter* frm_writer = NULL;
@@ -106,7 +107,7 @@ SenderSlot* SenderSink::create_slot(const SenderSlotConfig& slot_config) {
 
     core::SharedPtr<SenderSlot> slot = new (arena_) SenderSlot(
         sink_config_, slot_config, state_tracker_, processor_map_, encoding_map_,
-        *fanout_, packet_factory_, frame_factory_, arena_, dumper_.get());
+        *fanout_, packet_factory_, frame_factory_, arena_);
 
     if (!slot) {
         roc_log(LogError, "sender sink: can't create slot, allocation failed");

@@ -10,6 +10,7 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_core/time.h"
+#include "roc_dbgio/csv_dumper.h"
 
 namespace roc {
 namespace audio {
@@ -35,8 +36,7 @@ float lower_thrs_to_step_lat_update(const float x) {
 
 LatencyTuner::LatencyTuner(const LatencyConfig& latency_config,
                            const FreqEstimatorConfig& fe_config,
-                           const SampleSpec& sample_spec,
-                           dbgio::CsvDumper* dumper)
+                           const SampleSpec& sample_spec)
     : stream_pos_(0)
     , scale_interval_(sample_spec.ns_2_stream_timestamp(latency_config.scaling_interval))
     , scale_pos_(0)
@@ -83,7 +83,6 @@ LatencyTuner::LatencyTuner(const LatencyConfig& latency_config,
     , lat_update_inc_step_(lower_thrs_to_step_lat_update(
           latency_config.latency_decrease_relative_threshold))
     , last_lat_limiter_(LogInterval, 1)
-    , dumper_(dumper)
     , init_status_(status::NoStatus) {
     roc_log(
         LogDebug,
@@ -157,8 +156,7 @@ LatencyTuner::LatencyTuner(const LatencyConfig& latency_config,
 
         if (enable_latency_adjustment_) {
             fe_.reset(new (fe_) FreqEstimator(
-                fe_config, (packet::stream_timestamp_t)cur_target_latency_, sample_spec,
-                dumper_));
+                fe_config, (packet::stream_timestamp_t)cur_target_latency_, sample_spec));
         }
     }
 
@@ -217,7 +215,7 @@ bool LatencyTuner::update_stream() {
         compute_scaling_(actual_latency);
     }
 
-    if (dumper_) {
+    if (dbgio::CsvDumper::instance()) {
         dump_();
     }
 
@@ -556,7 +554,7 @@ void LatencyTuner::dump_() {
     e.fields[0] = core::timestamp(core::ClockUnix);
     e.fields[1] = niq_latency_;
     e.fields[2] = cur_target_latency_;
-    dumper_->write(e);
+    dbgio::CsvDumper::instance()->write(e);
 }
 
 } // namespace audio

@@ -82,7 +82,7 @@ TEST_GROUP(link_meter) {};
 
 TEST(link_meter, has_metrics) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     CHECK(!meter.has_metrics());
 
@@ -94,7 +94,7 @@ TEST(link_meter, has_metrics) {
 
 TEST(link_meter, last_seqnum) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     core::nanoseconds_t qts = qts_start;
     packet::stream_timestamp_t sts = sts_start;
@@ -126,7 +126,7 @@ TEST(link_meter, last_seqnum) {
 
 TEST(link_meter, last_seqnum_wrap) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     core::nanoseconds_t qts = qts_start;
     packet::stream_timestamp_t sts = sts_start;
@@ -167,7 +167,7 @@ TEST(link_meter, last_seqnum_wrap) {
 
 TEST(link_meter, jitter_test) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     const size_t num_packets = Duration * 100;
     core::nanoseconds_t ts_store[num_packets];
@@ -218,7 +218,7 @@ TEST(link_meter, jitter_test) {
 
 TEST(link_meter, ascending_test) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     const size_t num_packets = Duration * 100;
     core::nanoseconds_t ts_store[num_packets];
@@ -252,7 +252,7 @@ TEST(link_meter, ascending_test) {
 
 TEST(link_meter, descending_test) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     const size_t num_packets = Duration * 100;
     core::nanoseconds_t ts_store[num_packets];
@@ -286,7 +286,7 @@ TEST(link_meter, descending_test) {
 
 TEST(link_meter, saw_test) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     const size_t num_packets = Duration * 100;
     core::nanoseconds_t ts_store[num_packets];
@@ -324,7 +324,7 @@ TEST(link_meter, saw_test) {
 
 TEST(link_meter, losses_test) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     const size_t num_packets = Duration * 2 * (1 << 16);
     int64_t total_losses = 0;
@@ -360,7 +360,7 @@ TEST(link_meter, losses_test) {
 
 TEST(link_meter, total_counter) {
     packet::FifoQueue queue;
-    LinkMeter meter(queue, make_config(), encoding_map, arena, NULL);
+    LinkMeter meter(queue, make_config(), encoding_map, arena);
 
     core::nanoseconds_t ts = qts_start;
     packet::stream_timestamp_t sts = sts_start;
@@ -392,7 +392,7 @@ TEST(link_meter, forward_error) {
 
     for (size_t st_n = 0; st_n < ROC_ARRAY_SIZE(status_list); st_n++) {
         test::StatusWriter writer(status_list[st_n]);
-        LinkMeter meter(writer, make_config(), encoding_map, arena, NULL);
+        LinkMeter meter(writer, make_config(), encoding_map, arena);
 
         LONGS_EQUAL(status_list[st_n],
                     meter.write(new_packet(100, qts_start, sts_start)));

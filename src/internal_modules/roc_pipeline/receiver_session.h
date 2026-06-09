@@ -30,7 +30,6 @@
 #include "roc_core/optional.h"
 #include "roc_core/ref_counted.h"
 #include "roc_core/scoped_ptr.h"
-#include "roc_dbgio/csv_dumper.h"
 #include "roc_fec/block_reader.h"
 #include "roc_fec/iblock_decoder.h"
 #include "roc_packet/delayed_reader.h"
@@ -70,8 +69,7 @@ public:
                     rtp::EncodingMap& encoding_map,
                     packet::PacketFactory& packet_factory,
                     audio::FrameFactory& frame_factory,
-                    core::IArena& arena,
-                    dbgio::CsvDumper* dumper);
+                    core::IArena& arena);
 
     //! Check if the pipeline was successfully constructed.
     status::StatusCode init_status() const;
@@ -157,8 +155,6 @@ private:
     core::Optional<audio::ResamplerReader> resampler_reader_;
 
     core::Optional<audio::LatencyMonitor> latency_monitor_;
-
-    dbgio::CsvDumper* dumper_;
 
     status::StatusCode init_status_;
     status::StatusCode fail_status_;

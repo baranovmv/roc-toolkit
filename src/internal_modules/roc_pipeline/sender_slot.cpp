@@ -22,8 +22,7 @@ SenderSlot::SenderSlot(const SenderSinkConfig& sink_config,
                        audio::Fanout& fanout,
                        packet::PacketFactory& packet_factory,
                        audio::FrameFactory& frame_factory,
-                       core::IArena& arena,
-                       dbgio::CsvDumper* dumper)
+                       core::IArena& arena)
     : core::RefCounted<SenderSlot, core::ArenaAllocation>(arena)
     , sink_config_(sink_config)
     , fanout_(fanout)
@@ -33,8 +32,7 @@ SenderSlot::SenderSlot(const SenderSinkConfig& sink_config,
                encoding_map,
                packet_factory,
                frame_factory,
-               arena,
-               dumper)
+               arena)
     , init_status_(status::NoStatus) {
     roc_log(LogDebug, "sender slot: initializing");
 

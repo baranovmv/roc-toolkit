@@ -21,9 +21,8 @@ FeedbackMonitor::FeedbackMonitor(IFrameWriter& writer,
                                  const FeedbackConfig& feedback_config,
                                  const LatencyConfig& latency_config,
                                  const FreqEstimatorConfig& fe_config,
-                                 const SampleSpec& sample_spec,
-                                 dbgio::CsvDumper* dumper)
-    : tuner_(latency_config, fe_config, sample_spec, dumper)
+                                 const SampleSpec& sample_spec)
+    : tuner_(latency_config, fe_config, sample_spec)
     , use_packetizer_(false)
     , has_feedback_(false)
     , last_feedback_ts_(0)

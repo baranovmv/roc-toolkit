@@ -295,7 +295,7 @@ TEST(depacketizer, one_packet_one_read) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     write_packet(queue, new_packet(encoder, 0, 0.11f, Now));
@@ -312,7 +312,7 @@ TEST(depacketizer, one_packet_multiple_reads) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     write_packet(queue, new_packet(encoder, 0, 0.11f, Now));
@@ -339,7 +339,7 @@ TEST(depacketizer, multiple_packets_one_read) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     core::nanoseconds_t cts = Now;
@@ -368,7 +368,7 @@ TEST(depacketizer, multiple_packets_multiple_reads) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     // Start with a packet with zero capture timestamp.
@@ -420,7 +420,7 @@ TEST(depacketizer, timestamp_wrap) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     const packet::stream_timestamp_t ts2 = 0;
@@ -451,7 +451,7 @@ TEST(depacketizer, drop_late_packets) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     const packet::stream_timestamp_t ts1 = SamplesPerPacket * 2;
@@ -482,7 +482,7 @@ TEST(depacketizer, drop_late_packets_timestamp_wrap) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     const packet::stream_timestamp_t ts1 = 0;
@@ -513,7 +513,7 @@ TEST(depacketizer, zeros_no_first_packet) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     expect_output(status::StatusOK, dp, SamplesPerPacket, SamplesPerPacket, 0.00f, 0);
@@ -524,7 +524,7 @@ TEST(depacketizer, zeros_no_next_packet) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     write_packet(queue, new_packet(encoder, 0, 0.11f, 0));
@@ -541,7 +541,7 @@ TEST(depacketizer, zeros_between_packets) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     const core::nanoseconds_t capt_ts1 = Now;
@@ -564,7 +564,7 @@ TEST(depacketizer, zeros_between_packets_timestamp_wrap) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     const packet::stream_timestamp_t ts2 = 0;
@@ -594,7 +594,7 @@ TEST(depacketizer, zeros_after_packet) {
     CHECK(SamplesPerPacket % 2 == 0);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     write_packet(queue, new_packet(encoder, 0, 0.11f, Now));
@@ -614,7 +614,7 @@ TEST(depacketizer, packet_after_zeros) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     expect_output(status::StatusOK, dp, SamplesPerPacket, SamplesPerPacket, 0.00f, 0);
@@ -635,7 +635,7 @@ TEST(depacketizer, overlapping_packets) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     const packet::stream_timestamp_t ts1 = 0;
@@ -669,7 +669,7 @@ TEST(depacketizer, late_reordered) {
     CHECK(SamplesPerPacket % 2 == 0);
 
     ArrayReader reader;
-    Depacketizer dp(reader, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(reader, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     packet::PacketPtr p1 =
@@ -713,7 +713,7 @@ TEST(depacketizer, frequent_losses_hard_read) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     core::nanoseconds_t pkt_cts = Now;
@@ -833,7 +833,7 @@ TEST(depacketizer, frequent_losses_soft_read) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     core::nanoseconds_t pkt_cts = Now;
@@ -965,7 +965,7 @@ TEST(depacketizer, frame_flags_signal_gaps) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     packet::PacketPtr packets[][PacketsPerFrame] = {
@@ -1086,7 +1086,7 @@ TEST(depacketizer, frame_flags_drops) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     packet::PacketPtr packets[] = {
@@ -1137,7 +1137,7 @@ TEST(depacketizer, capture_timestamp) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     core::nanoseconds_t capt_ts = 0;
@@ -1194,7 +1194,7 @@ TEST(depacketizer, capture_timestamp_fract_frame_per_packet) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     core::nanoseconds_t capt_ts =
@@ -1218,7 +1218,7 @@ TEST(depacketizer, capture_timestamp_small_non_zero) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     // 1st packet in frame has 0 capture ts
@@ -1272,7 +1272,7 @@ TEST(depacketizer, partial_on_big_read) {
     PcmDecoder decoder(packet_spec, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     core::nanoseconds_t pkt_cts = Now;
@@ -1296,7 +1296,7 @@ TEST(depacketizer, forward_reader_error) {
 
     packet::FifoQueue queue;
     StatusReader reader(queue);
-    Depacketizer dp(reader, decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(reader, decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     // push one packet
@@ -1326,7 +1326,7 @@ TEST(depacketizer, forward_decoder_error) {
     MockDecoder mock_decoder(decoder, arena);
 
     packet::FifoQueue queue;
-    Depacketizer dp(queue, mock_decoder, frame_factory, frame_spec, NULL);
+    Depacketizer dp(queue, mock_decoder, frame_factory, frame_spec);
     LONGS_EQUAL(status::StatusOK, dp.init_status());
 
     mock_decoder.set_status(status::StatusAbort);
@@ -1355,7 +1355,7 @@ TEST(depacketizer, preallocated_buffer) {
 
         packet::FifoQueue queue;
         StatusReader reader(queue);
-        Depacketizer dp(reader, decoder, frame_factory, frame_spec, NULL);
+        Depacketizer dp(reader, decoder, frame_factory, frame_spec);
         LONGS_EQUAL(status::StatusOK, dp.init_status());
 
         FrameFactory mock_factory(arena, orig_buf_sz * sizeof(sample_t));

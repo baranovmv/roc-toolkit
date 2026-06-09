@@ -14,9 +14,11 @@
 
 #include "roc_core/atomic_bool.h"
 #include "roc_core/mutex.h"
+#include "roc_core/noncopyable.h"
 #include "roc_core/optional.h"
 #include "roc_core/rate_limiter.h"
 #include "roc_core/semaphore.h"
+#include "roc_core/singleton.h"
 #include "roc_core/spsc_ring_buffer.h"
 #include "roc_core/stddefs.h"
 #include "roc_core/thread.h"
@@ -75,11 +77,20 @@ struct CsvConfig {
 //! Asynchronous CSV dumper.
 //! Writes entries to CSV file from background thread.
 //! Recommended to be used from a single thread.
-class CsvDumper : private core::Thread {
+class CsvDumper : private core::Thread, public core::NonCopyable<> {
 public:
     //! Initialize.
     CsvDumper(const CsvConfig& config, core::IArena& arena);
     ~CsvDumper();
+
+    //! Get instance.
+    static CsvDumper* instance() {
+        return core::AtomicOps::load_relaxed(dumper_);
+    }
+
+    static void enable(CsvDumper* dumper) {
+        core::AtomicOps::store_relaxed(dumper_, dumper);
+    }
 
     //! Open file and start background thread.
     ROC_NODISCARD status::StatusCode open();
@@ -98,6 +109,8 @@ public:
     void write(const CsvEntry& entry);
 
 private:
+    static CsvDumper* dumper_;
+
     virtual void run();
 
     core::RateLimiter& limiter_(char type);

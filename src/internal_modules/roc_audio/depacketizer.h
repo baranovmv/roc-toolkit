@@ -19,7 +19,6 @@
 #include "roc_audio/sample_spec.h"
 #include "roc_core/noncopyable.h"
 #include "roc_core/rate_limiter.h"
-#include "roc_dbgio/csv_dumper.h"
 #include "roc_packet/ireader.h"
 
 namespace roc {
@@ -95,8 +94,7 @@ public:
     Depacketizer(packet::IReader& packet_reader,
                  IFrameDecoder& payload_decoder,
                  FrameFactory& frame_factory,
-                 const SampleSpec& sample_spec,
-                 dbgio::CsvDumper* dumper);
+                 const SampleSpec& sample_spec);
 
     //! Check if the object was successfully constructed.
     status::StatusCode init_status() const;
@@ -185,8 +183,6 @@ private:
     bool is_started_;
 
     core::RateLimiter rate_limiter_;
-    dbgio::CsvDumper* dumper_;
-
     status::StatusCode init_status_;
 };
 

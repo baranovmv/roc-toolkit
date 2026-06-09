@@ -10,6 +10,7 @@
 #include "roc_core/log.h"
 #include "roc_core/panic.h"
 #include "roc_core/time.h"
+#include "roc_dbgio/csv_dumper.h"
 
 namespace roc {
 namespace audio {
@@ -83,8 +84,7 @@ bool FreqEstimatorConfig::deduce_defaults(LatencyTunerProfile latency_profile) {
 
 FreqEstimator::FreqEstimator(const FreqEstimatorConfig& config,
                              packet::stream_timestamp_t target_latency,
-                             const SampleSpec& sample_spec,
-                             dbgio::CsvDumper* dumper)
+                             const SampleSpec& sample_spec)
     : config_(config)
     , dec1_ind_(0)
     , dec2_ind_(0)
@@ -96,8 +96,7 @@ FreqEstimator::FreqEstimator(const FreqEstimatorConfig& config,
     , last_unstable_time_(0)
     , stability_duration_criteria_(
           sample_spec.ns_2_stream_timestamp_delta(config.stability_duration_criteria))
-    , current_stream_pos_(0)
-    , dumper_(dumper) {
+    , current_stream_pos_(0) {
     roc_log(LogDebug, "freq estimator: initializing: P=%e I=%e dc1=%lu dc2=%lu",
             config_.P, config_.I, (unsigned long)config_.decimation_factor1,
             (unsigned long)config_.decimation_factor2);
@@ -137,7 +136,7 @@ void FreqEstimator::update_current_latency(packet::stream_timestamp_t current_la
     double filtered = 0;
 
     if (run_decimators_(current_latency, filtered)) {
-        if (dumper_) {
+        if (dbgio::CsvDumper::instance()) {
             dump_(filtered);
         }
         coeff_ = run_controller_(filtered);
@@ -243,7 +242,7 @@ void FreqEstimator::dump_(double filtered) {
     e.fields[2] = target_;
     e.fields[3] = (filtered - target_) * config_.P;
     e.fields[4] = accum_ * config_.I;
-    dumper_->write(e);
+    dbgio::CsvDumper::instance()->write(e);
 }
 
 } // namespace audio

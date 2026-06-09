@@ -42,6 +42,7 @@ ReceiverSource::ReceiverSource(const ReceiverSourceConfig& source_config,
         if ((init_status_ = dumper_->open()) != status::StatusOK) {
             return;
         }
+        dbgio::CsvDumper::enable(dumper_.get());
     }
 
     audio::IFrameReader* frm_reader = NULL;
@@ -110,7 +111,7 @@ ReceiverSlot* ReceiverSource::create_slot(const ReceiverSlotConfig& slot_config)
 
     core::SharedPtr<ReceiverSlot> slot = new (arena_) ReceiverSlot(
         source_config_, slot_config, state_tracker_, *mixer_, processor_map_,
-        encoding_map_, packet_factory_, frame_factory_, arena_, dumper_.get());
+        encoding_map_, packet_factory_, frame_factory_, arena_);
 
     if (!slot) {
         roc_log(LogError, "receiver source: can't create slot, allocation failed");

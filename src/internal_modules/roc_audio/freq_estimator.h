@@ -18,7 +18,6 @@
 #include "roc_audio/sample_spec.h"
 #include "roc_core/attributes.h"
 #include "roc_core/noncopyable.h"
-#include "roc_dbgio/csv_dumper.h"
 #include "roc_packet/units.h"
 
 namespace roc {
@@ -82,8 +81,7 @@ public:
     //!  - @p target_latency defines latency we want to archive.
     FreqEstimator(const FreqEstimatorConfig& config,
                   packet::stream_timestamp_t target_latency,
-                  const SampleSpec& sample_spec,
-                  dbgio::CsvDumper* dumper);
+                  const SampleSpec& sample_spec);
 
     //! Get current frequency coefficient to be passed to resampler.
     float freq_coeff() const;
@@ -131,8 +129,6 @@ private:
     const packet::stream_timestamp_diff_t stability_duration_criteria_;
     // Current time.
     packet::stream_timestamp_t current_stream_pos_;
-
-    dbgio::CsvDumper* dumper_;
 };
 
 } // namespace audio

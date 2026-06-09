@@ -38,7 +38,7 @@ TEST(freq_estimator, initial) {
         FreqEstimatorConfig config;
         CHECK(config.deduce_defaults(profile_list[p]));
 
-        FreqEstimator fe(config, Target, sample_spec, NULL);
+        FreqEstimator fe(config, Target, sample_spec);
 
         DOUBLES_EQUAL(1.0, (double)fe.freq_coeff(), Epsilon);
     }
@@ -49,7 +49,7 @@ TEST(freq_estimator, aim_queue_size) {
         FreqEstimatorConfig config;
         CHECK(config.deduce_defaults(profile_list[p]));
 
-        FreqEstimator fe(config, Target, sample_spec, NULL);
+        FreqEstimator fe(config, Target, sample_spec);
 
         for (size_t n = 0; n < 1000; n++) {
             fe.update_current_latency(Target);
@@ -64,7 +64,7 @@ TEST(freq_estimator, large_queue_size) {
         FreqEstimatorConfig config;
         CHECK(config.deduce_defaults(profile_list[p]));
 
-        FreqEstimator fe(config, Target, sample_spec, NULL);
+        FreqEstimator fe(config, Target, sample_spec);
 
         do {
             fe.update_current_latency(Target * 2);
@@ -77,7 +77,7 @@ TEST(freq_estimator, small_queue_size) {
         FreqEstimatorConfig config;
         CHECK(config.deduce_defaults(profile_list[p]));
 
-        FreqEstimator fe(config, Target, sample_spec, NULL);
+        FreqEstimator fe(config, Target, sample_spec);
 
         do {
             fe.update_current_latency(Target / 2);
