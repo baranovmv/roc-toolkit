@@ -126,7 +126,7 @@ size_t compute_max_frame_size(const sndio::IoConfig& io_config) {
 
     core::nanoseconds_t len = io_config.frame_length;
     if (len == 0) {
-        len = 10 * core::Millisecond;
+        len = sndio::DefaultFrameLength;
     }
 
     return spec.ns_2_samples_overall(len) * sizeof(audio::sample_t);
