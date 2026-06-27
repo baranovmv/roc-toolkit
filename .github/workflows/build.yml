@@ -6,7 +6,6 @@ on:
       - master
       - develop
       - feature/*
-      - test/*
     tags:
       - v*
 
