@@ -333,7 +333,7 @@ env['STATIC_AND_SHARED_OBJECTS_ARE_THE_SAME'] = 1
 for var in ['CXX', 'CC', 'LD', 'AR', 'RANLIB', 'LIPO', 'INSTALL_NAME_TOOL',
             'RAGEL', 'GENGETOPT',
             'PKG_CONFIG', 'PKG_CONFIG_PATH', 'CONFIG_GUESS',
-            'CLANG_FORMAT']:
+            'CLANG_FORMAT', 'CMAKE']:
     env.OverrideFromArgument(var)
 
 env.OverrideFromArgument('CXXLD', names=['CXXLD', 'CXX'])

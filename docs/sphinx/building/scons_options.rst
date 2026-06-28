@@ -102,6 +102,8 @@ Options
 Variables
 =========
 
+Toolchain:
+
 - CPPFLAGS
 - CXXFLAGS
 - CFLAGS
@@ -110,21 +112,37 @@ Variables
 - CXX
 - CC
 - CXXLD
-- CCLD or LD
+- CCLD / LD
 - AR
 - RANLIB
 - STRIP
 - OBJCOPY
 - INSTALL_NAME_TOOL
+
+Codegen:
+
 - RAGEL
 - GENGETOPT
+
+Documentation:
+
 - DOXYGEN
 - SPHINX_BUILD
 - BREATHE_APIDOC
+
+Dependencies:
+
 - PKG_CONFIG
 - PKG_CONFIG_PATH
 - CONFIG_GUESS
+- CMAKE
+
+Development:
+
 - CLANG_FORMAT
+
+Installation:
+
 - DESTDIR
 
 Targets

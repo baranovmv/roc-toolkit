@@ -195,8 +195,9 @@ def execute_cmake(ctx, src_dir, args=None, flags=None):
 
     c_compiler = _getvar('CC', 'gcc')
     cxx_compiler = _getvar('CXX', 'g++')
-    is_gnu = detect_compiler_family(ctx.env, ctx.toolchain, 'gcc')
+    gnu_compatible = check_compiler_compatibility(ctx.env, ctx.toolchain, 'gnu')
     sysroot = find_sysroot(ctx.toolchain, c_compiler)
+    cmake = find_cmake(ctx)
 
     need_sysroot = bool(sysroot)
     need_tools = True
@@ -263,6 +264,25 @@ def execute_cmake(ctx, src_dir, args=None, flags=None):
             '-DCMAKE_RANLIB=' + quote(find_tool(_getvar('RANLIB', 'ranlib'))),
         ]
 
+    if ctx.android_platform:
+        ar = find_tool(_getvar('AR', 'llvm-ar'))
+        ranlib = find_tool(_getvar('RANLIB', 'llvm-ranlib'))
+
+        if check_ar_compatibility(ar, 'gnu'):
+            ar_create = '<CMAKE_AR> --format=gnu qc <TARGET> <LINK_FLAGS> <OBJECTS>'
+            ar_append = '<CMAKE_AR> --format=gnu q <TARGET> <LINK_FLAGS> <OBJECTS>'
+            ar_finish = '<CMAKE_RANLIB> <TARGET>'
+            args += [
+                '-DCMAKE_AR=' + quote(ar),
+                '-DCMAKE_RANLIB=' + quote(ranlib),
+                quote('-DCMAKE_C_ARCHIVE_CREATE=' + ar_create),
+                quote('-DCMAKE_C_ARCHIVE_APPEND=' + ar_append),
+                quote('-DCMAKE_C_ARCHIVE_FINISH=' + ar_finish),
+                quote('-DCMAKE_CXX_ARCHIVE_CREATE=' + ar_create),
+                quote('-DCMAKE_CXX_ARCHIVE_APPEND=' + ar_append),
+                quote('-DCMAKE_CXX_ARCHIVE_FINISH=' + ar_finish),
+            ]
+
     if ctx.env.get('COMPILER_LAUNCHER', None):
         args += [
             '-DCMAKE_CXX_COMPILER_LAUNCHER=' + quote(ctx.env['COMPILER_LAUNCHER']),
@@ -281,7 +301,7 @@ def execute_cmake(ctx, src_dir, args=None, flags=None):
 
     if ctx.variant == 'debug':
         # -ggdb is required for sanitizer backtrace
-        if is_gnu:
+        if gnu_compatible:
             cflags += ['-ggdb']
         args += ['-DCMAKE_BUILD_TYPE=Debug']
     else:
@@ -293,18 +313,19 @@ def execute_cmake(ctx, src_dir, args=None, flags=None):
     if os.name == 'posix' and which('env'):
         env_cmd = 'env'
     else:
-        env_cmd = 'cmake -E env'
+        env_cmd = quote(cmake) + ' -E env'
 
     cmake_cmd = \
         env_cmd + \
         ' ' + quote('CFLAGS=' + ' '.join(cflags)) + \
         ' ' + quote('CXXFLAGS=' + ' '.join(cflags)) + \
-        ' cmake ' + src_dir + ' ' + ' '.join(args)
+        ' ' + quote(cmake) + ' ' + quote(src_dir) + ' ' + ' '.join(args)
 
     execute(ctx, cmake_cmd)
 
 def execute_cmake_build(ctx):
-    cmd = ['cmake', '--build', '.']
+    cmake = find_cmake(ctx)
+    cmd = [quote(cmake), '--build', '.']
 
     # assume we're using -G"Unix Makefiles"
     cmd += ['--', 'VERBOSE=1']
@@ -408,7 +429,7 @@ def format_vars(ctx, disable_launcher=False, env=None):
     for k, v in env.items():
         if v is None:
             continue
-        if k == 'COMPILER_LAUNCHER':
+        if k in ['COMPILER_LAUNCHER', 'CMAKE']:
             continue
         elif k in ['CC', 'CXX'] and not disable_launcher:
             if ctx.env.get('COMPILER_LAUNCHER', None):
@@ -432,11 +453,11 @@ def format_flags(ctx, cflags='', ldflags='', pthread=False):
     cflags = ([cflags] if cflags else []) + ['-I' + path for path in inc_dirs]
     ldflags = ['-L' + path for path in lib_dirs] + ([ldflags] if ldflags else [])
 
-    is_gnu = detect_compiler_family(ctx.env, ctx.toolchain, 'gcc')
-    is_clang = detect_compiler_family(ctx.env, ctx.toolchain, 'clang')
+    gnu_compatible = check_compiler_compatibility(ctx.env, ctx.toolchain, 'gnu')
+    llvm_compatible = check_compiler_compatibility(ctx.env, ctx.toolchain, 'llvm')
 
     if ctx.variant == 'debug':
-        if is_gnu or is_clang:
+        if gnu_compatible or llvm_compatible:
             cflags += ['-ggdb']
         else:
             cflags += ['-g']
@@ -444,14 +465,14 @@ def format_flags(ctx, cflags='', ldflags='', pthread=False):
         cflags += ['-O2']
 
     if pthread and not ctx.android_platform:
-        if is_gnu or is_clang:
+        if gnu_compatible or llvm_compatible:
             cflags += ['-pthread']
-        if is_gnu:
+        if gnu_compatible:
             ldflags += ['-pthread']
         else:
             ldflags += ['-lpthread']
 
-    if is_gnu:
+    if gnu_compatible:
         ldflags += ['-Wl,-rpath-link=' + path for path in rpath_dirs]
 
     if ctx.macos_platform:
@@ -637,6 +658,31 @@ def generate_pc_files(ctx, pc_dir):
                 cflags=cflags,
                 ldflags=ldflags))
 
+def find_native_cc_cxx_compilers():
+    def _have_compiler(compiler):
+        try:
+            subprocess.run([compiler, '-v'],
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    compilers = {}
+
+    for compiler in ['gcc', 'clang', 'cc']:
+        if _have_compiler(compiler):
+            compilers['CC'] = which(compiler)
+            compilers['CCLD'] = which(compiler)
+            break
+
+    for compiler in ['g++', 'clang++', 'c++']:
+        if _have_compiler(compiler):
+            compilers['CXX'] = which(compiler)
+            compilers['CXXLD'] = which(compiler)
+            break
+
+    return compilers
+
 def find_tool(tool):
     if '/' in tool:
         return tool
@@ -663,6 +709,29 @@ def find_sysroot(toolchain, compiler):
 
     return None
 
+def find_cmake(ctx):
+    # if user explicitly defined CMAKE, prefer it
+    if ctx.env.get('CMAKE'):
+        return ctx.env['CMAKE']
+
+    # if we're building for android, prefer cmake from Android SDK
+    if ctx.android_platform:
+        cmake = find_android_cmake(ctx)
+        if cmake:
+            return cmake
+
+    # normally, just find cmake in path
+    if which('cmake'):
+        return 'cmake'
+
+    # also detect cmake installed as .app on macOS
+    if sys.platform == 'darwin' and (not ctx.toolchain or ctx.macos_platform):
+        macos_cmake = '/Applications/CMake.app/Contents/bin/cmake'
+        if os.path.isfile(macos_cmake):
+            return macos_cmake
+
+    die("cmake not found in PATH")
+
 def find_android_sysroot(compiler):
     compiler_exe = which(compiler)
     if compiler_exe:
@@ -672,6 +741,48 @@ def find_android_toolchain_file(compiler):
     compiler_exe = which(compiler)
     if compiler_exe:
         return find_file_upwards(compiler_exe, 'build/cmake/android.toolchain.cmake')
+
+def find_android_sdk_root(ctx):
+    for var in ['ANDROID_HOME', 'ANDROID_SDK_ROOT']:
+        sdk_root = os.environ.get(var)
+        if sdk_root and os.path.isdir(sdk_root):
+            return sdk_root
+
+    ndk_root = os.environ.get('ANDROID_NDK_ROOT')
+    if ndk_root:
+        path = os.path.abspath(ndk_root)
+        parts = path.replace('\\', '/').split('/')
+        for i, part in enumerate(parts):
+            if part == 'ndk-bundle' and i > 0:
+                sdk_root = os.sep.join(parts[:i]) or os.sep
+                if os.path.isdir(sdk_root):
+                    return sdk_root
+            if part == 'ndk' and i > 0 and i + 1 < len(parts):
+                sdk_root = os.sep.join(parts[:i]) or os.sep
+                if os.path.isdir(sdk_root):
+                    return sdk_root
+
+    return None
+
+def find_android_cmake(ctx):
+    sdk_root = find_android_sdk_root(ctx)
+    if not sdk_root:
+        return None
+
+    candidates = []
+    for cmake in glob.glob(os.path.join(sdk_root, 'cmake', '*', 'bin', 'cmake')):
+        version = os.path.basename(os.path.dirname(os.path.dirname(cmake)))
+        if not re.match(r'^\d+(\.\d+)*$', version):
+            continue
+        if not os.path.isfile(cmake) or not os.access(cmake, os.X_OK):
+            continue
+        version_key = tuple(int(part) for part in version.split('.'))
+        candidates.append((version_key, cmake))
+
+    if candidates:
+        return sorted(candidates)[-1][1]
+
+    return None
 
 def detect_android_abi(toolchain):
     try:
@@ -696,76 +807,6 @@ def detect_android_api(compiler):
                 return m.group(1)
     except:
         pass
-
-def detect_compiler_family(env, toolchain, family):
-    if family == 'gcc':
-        keys = ['GNU', 'gnu', 'gcc', 'g++']
-    elif family == 'clang':
-        keys = ['clang']
-
-    def _check_tool(toolchain, tool):
-        if toolchain:
-            tool = '{}-{}'.format(toolchain, tool)
-        try:
-            out = run_command([tool, '-v'],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            for k in keys:
-                if k in out:
-                    return True
-        except:
-            pass
-        return False
-
-    for var in ['CC', 'CCLD', 'CXX', 'CXXLD']:
-        if var in env:
-            if not _check_tool('', env[var]):
-                return False
-
-    if not 'gnu' in toolchain:
-        if 'CC' not in env:
-            for tool in ['cc', 'gcc', 'clang']:
-                if _check_tool(toolchain, tool):
-                    break
-            else:
-                return False
-
-        if 'CCLD' not in env:
-            for tool in ['ld', 'gcc', 'clang']:
-                if _check_tool(toolchain, tool):
-                    break
-            else:
-                return False
-
-        if 'CXX' not in env or 'CXXLD' not in env:
-            for tool in ['g++', 'clang++']:
-                if _check_tool(toolchain, tool):
-                    break
-            else:
-                return False
-
-    return True
-
-def detect_compiler_presence(compiler):
-    try:
-        subprocess.run([compiler, '-v'],
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return False
-
-def detect_native_cc_cxx_compilers():
-    compilers = {}
-    for compiler in ['gcc', 'clang', 'cc']:
-        if detect_compiler_presence(compiler):
-            compilers['CC'] = which(compiler)
-            compilers['CCLD'] = which(compiler)
-            break
-    for compiler in ['g++', 'clang++', 'c++']:
-        if detect_compiler_presence(compiler):
-            compilers['CXX'] = which(compiler)
-            compilers['CXXLD'] = which(compiler)
-            break
-    return compilers
 
 # Guess platform argument for OpenSSL's Configure script basing on toolchain string.
 # (see `./Configure LIST` for a list of all platforms and their format)
@@ -889,13 +930,77 @@ def detect_cpu_count():
         return len(os.sched_getaffinity(0))
     except:
         pass
-
     try:
         return multiprocessing.cpu_count()
     except:
         pass
-
     return None
+
+def check_compiler_compatibility(env, toolchain, family):
+    if family == 'gnu':
+        keys = ['GNU', 'gnu', 'gcc', 'g++']
+    elif family == 'llvm':
+        keys = ['clang']
+
+    def _check_tool(toolchain, tool):
+        if toolchain:
+            tool = '{}-{}'.format(toolchain, tool)
+        try:
+            out = run_command([tool, '-v'],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            for k in keys:
+                if k in out:
+                    return True
+        except:
+            pass
+        return False
+
+    for var in ['CC', 'CCLD', 'CXX', 'CXXLD']:
+        if var in env:
+            if not _check_tool('', env[var]):
+                return False
+
+    if not 'gnu' in toolchain:
+        if 'CC' not in env:
+            for tool in ['cc', 'gcc', 'clang']:
+                if _check_tool(toolchain, tool):
+                    break
+            else:
+                return False
+
+        if 'CCLD' not in env:
+            for tool in ['ld', 'gcc', 'clang']:
+                if _check_tool(toolchain, tool):
+                    break
+            else:
+                return False
+
+        if 'CXX' not in env or 'CXXLD' not in env:
+            for tool in ['g++', 'clang++']:
+                if _check_tool(toolchain, tool):
+                    break
+            else:
+                return False
+
+    return True
+
+def check_ar_compatibility(ar, family):
+    if family == 'gnu':
+        try:
+            return subprocess.call([ar, '--format=gnu', '--version'],
+                                   stdout=DEV_NULL, stderr=DEV_NULL) == 0
+        except:
+            pass
+
+    if family == 'llvm':
+        try:
+            return 'llvm' in run_command(
+                [ar, '--version'],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT).lower()
+        except:
+            pass
+
+    return False
 
 def parse_env(unparsed_vars):
     env = dict()
@@ -1539,7 +1644,7 @@ if __name__ == '__main__':
         install_tree(ctx, '.', ctx.pkg_inc_dir, include=['*.h'])
         install_files(ctx, '.libs/libjson-c.a', ctx.pkg_lib_dir)
     elif ctx.pkg_name == 'gengetopt':
-        native_compilers = detect_native_cc_cxx_compilers();
+        native_compilers = find_native_cc_cxx_compilers();
         download(
             ctx,
             'https://ftpmirror.gnu.org/gnu/gengetopt/gengetopt-{ctx.pkg_ver}.tar.gz',
@@ -1559,7 +1664,7 @@ if __name__ == '__main__':
         execute_make(ctx, cpu_count=0) # -j is buggy for gengetopt
         install_files(ctx, 'src/gengetopt', ctx.pkg_bin_dir)
     elif ctx.pkg_name == 'ragel':
-        native_compilers = detect_native_cc_cxx_compilers();
+        native_compilers = find_native_cc_cxx_compilers();
         download(
             ctx,
             'https://www.colm.net/files/ragel/ragel-{ctx.pkg_ver}.tar.gz',

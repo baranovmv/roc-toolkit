@@ -32,6 +32,9 @@ def _build_thirdparty(env, versions, name, deps, is_native):
     if 'COMPILER_LAUNCHER' in env.Dictionary():
         env_vars += ['COMPILER_LAUNCHER=' + quote(env['COMPILER_LAUNCHER'])]
 
+    if 'CMAKE' in env.Dictionary():
+        env_vars += ['CMAKE=' + quote(env['CMAKE'])]
+
     if 'PKG_CONFIG' in env.Dictionary():
         env_vars += ['PKG_CONFIG=' + quote(env['PKG_CONFIG'])]
 
