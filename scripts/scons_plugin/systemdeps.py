@@ -1,12 +1,6 @@
 import os
 import textwrap
 
-# Python 2 compatibility.
-try:
-    from shlex import quote
-except:
-    from pipes import quote
-
 # Generate .pc file for roc.
 # This function uses information accumulated by:
 #  - AddPkgConfigDependency - list of .pc files of system dependencies
@@ -15,6 +9,23 @@ except:
 # All this information is included into resulting .pc file.
 # To work properly, GeneratePkgConfig should be called after aforementioned functions.
 def GeneratePkgConfig(env, build_dir, filename, prefix, libdir, name, desc, url, version):
+    # Rewrite an absolute path into a ${prefix}-relative form for use in a .pc file.
+    # The path must be located inside prefix, otherwise the .pc file would not be
+    # relocatable.
+    def _relate_to_prefix(path, prefix):
+        abspath = os.path.abspath(path)
+        absprefix = os.path.abspath(prefix)
+
+        if abspath != absprefix and not abspath.startswith(absprefix + os.sep):
+            env.Die(
+                "path '{}' is not inside prefix '{}', can't make .pc file relocatable".format(
+                    path, prefix))
+
+        relpath = os.path.relpath(abspath, absprefix)
+        if relpath == '.':
+            return '${prefix}'
+        return os.path.join('${prefix}', relpath)
+
     target = os.path.join(build_dir, filename)
 
     dep_list = env.get('_DEPS_PCFILES', [])
@@ -28,7 +39,7 @@ def GeneratePkgConfig(env, build_dir, filename, prefix, libdir, name, desc, url,
       env.get('_DEPS_LIBPATH', [])
 
     incdir_list = \
-      [prefix+'/include'] + \
+      [os.path.join(prefix, 'include')] + \
       env.get('_DEPS_CPPPATH', [])
 
     src = textwrap.dedent("""\
@@ -51,8 +62,8 @@ def GeneratePkgConfig(env, build_dir, filename, prefix, libdir, name, desc, url,
         version=version,
         deps=' '.join(dep_list),
         libs=' '.join(['-l'+s for s in lib_list]),
-        libdirs=' '.join(['-L'+quote(s) for s in libdir_list]),
-        incdirs=' '.join(['-I'+quote(s) for s in incdir_list]))
+        libdirs=' '.join(['-L'+_relate_to_prefix(s, prefix) for s in libdir_list]),
+        incdirs=' '.join(['-I'+_relate_to_prefix(s, prefix) for s in incdir_list]))
 
     def write_file(target, source, env):
         f = open(target[0].path, 'w')
