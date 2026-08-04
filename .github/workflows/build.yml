@@ -294,10 +294,10 @@ jobs:
           - toolchain: aarch64-linux-android29
             abi: aarch64
             api: 29
-            ndk-major: 21
-            ndk: 21.4.7075529
-            build_tools: 28.0.3
-            cmake: 3.10.2.4988404
+            ndk-major: 25
+            ndk: 25.2.9519653
+            build_tools: 30.0.3
+            cmake: 3.22.1
 
     runs-on: macos-latest
 
