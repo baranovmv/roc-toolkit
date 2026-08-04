@@ -31,15 +31,45 @@ if [[ "${action}" == create_routes ]]
 then
     color_msg "creating routes"
 
-    adb shell "ip a" | grep 'state UP' | cut -d':' -f2 | awk '{print $1}' | cut -d'@' -f1 |
-        while read iface
-        do
-            if ! adb shell ip route show table all | \
-                    grep -qF "224.0.0.0/4 dev ${iface} table local"
-            then
-                run_cmd adb shell "su 0 ip route add 224.0.0.0/4 dev ${iface} table local"
-            fi
-        done
+    # Poll for a while to verify that the emulator has network interfaces available
+    ip_output=""
+    for _ in $(seq 1 10)
+    do
+        ip_output="$(adb shell "ip a" 2>/dev/null || true)"
+        if echo "${ip_output}" | grep -q 'state UP'
+        then
+            break
+        fi
+        sleep 2
+    done
+
+    echo "+++ adb shell ip a"
+    echo "${ip_output}"
+
+    # Collect interfaces in state UP. grep returns non-zero when it
+    # find nothing, so guard the pipeline against pipefail to avoid aborting
+    # the whole script when no interface is up.
+    ifaces="$(echo "${ip_output}" \
+        | grep 'state UP' \
+        | cut -d':' -f2 \
+        | awk '{print $1}' \
+        | cut -d'@' -f1 || true)"
+
+    if [[ -z "${ifaces}" ]]
+    then
+        color_msg "warning: no network interface is up, skipping route setup"
+    fi
+
+    # Iterate over a plain variable (not a pipe) so that the "adb" calls inside
+    # the loop do not consume the loop's stdin and skip interfaces.
+    for iface in ${ifaces}
+    do
+        if ! adb shell ip route show table all | \
+                grep -qF "224.0.0.0/4 dev ${iface} table local"
+        then
+            run_cmd adb shell "su 0 ip route add 224.0.0.0/4 dev ${iface} table local"
+        fi
+    done
 fi
 
 if [[ "${action}" == start_avd ]]
