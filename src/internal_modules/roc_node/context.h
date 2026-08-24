@@ -34,7 +34,7 @@ struct ContextConfig {
     //! Maximum size in bytes of an audio frame.
     size_t max_frame_size;
 
-    //! Set real-time priority. Requires root priviligies.
+    //! Set real-time priority. Requires root privileges.
     int realtime_prio;
 
     ContextConfig()

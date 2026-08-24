@@ -51,7 +51,8 @@ bool Thread::enable_realtime(const int sched_prio) {
     memset(&param, 0, sizeof(param));
     param.sched_priority = sched_prio;
 
-    roc_log(LogInfo, "thread: set realtime priority");
+    roc_log(LogDebug, "thread: setting realtime priority to %d", sched_prio);
+
     if (int err = pthread_setschedparam(pthread_self(), SCHED_RR, &param)) {
         roc_log(LogError,
                 "thread: can't set realtime priority: pthread_setschedparam(): %s",

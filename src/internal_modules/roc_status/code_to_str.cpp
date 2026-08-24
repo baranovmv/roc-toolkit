@@ -66,8 +66,6 @@ const char* code_to_str(StatusCode code) {
         return "BadOperation";
     case StatusBadState:
         return "BadState";
-    case StatusFailedRealtime:
-        return "FailedRealtime";
     }
 
     // Most likely someone forgot to initialize status to a proper
