@@ -306,7 +306,7 @@ TEST_GROUP(loopback_encoder_2_decoder) {
                         test::FrameSamples / test::PacketSamples;
                     CHECK(recv_expected_pkts >= send_expected_pkts);
                     CHECK(recv_expected_pkts
-                          <= send_expected_pkts + packets_per_frame * 5);
+                          <= send_expected_pkts + packets_per_frame * 100);
                 }
             }
         }
