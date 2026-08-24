@@ -24,6 +24,8 @@ core::HeapArena arena;
 core::SlabPool<core::Buffer> buffer_pool("buffer_pool", arena, MaxBufSize);
 core::SlabPool<packet::Packet> packet_pool("packet_pool", arena);
 
+NetworkConfig network_config;
+
 bool resolve_endpoint_address(NetworkLoop& net_loop,
                               const address::NetworkUri& endpoint_uri,
                               address::SocketAddr& result_address) {
@@ -43,8 +45,7 @@ bool resolve_endpoint_address(NetworkLoop& net_loop,
 TEST_GROUP(resolve) {};
 
 TEST(resolve, ipv4) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     address::NetworkUri endpoint_uri(arena);
@@ -58,8 +59,7 @@ TEST(resolve, ipv4) {
 }
 
 TEST(resolve, ipv6) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     address::NetworkUri endpoint_uri(arena);
@@ -73,8 +73,7 @@ TEST(resolve, ipv6) {
 }
 
 TEST(resolve, hostname) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     address::NetworkUri endpoint_uri(arena);
@@ -94,8 +93,7 @@ TEST(resolve, hostname) {
 }
 
 TEST(resolve, standard_port) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     address::NetworkUri endpoint_uri(arena);
@@ -108,8 +106,7 @@ TEST(resolve, standard_port) {
 }
 
 TEST(resolve, bad_host) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     { // bad ipv4

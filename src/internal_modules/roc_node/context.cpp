@@ -13,6 +13,16 @@
 namespace roc {
 namespace node {
 
+namespace {
+
+netio::NetworkConfig make_network_config(const ContextConfig& config) {
+    netio::NetworkConfig net_config;
+    net_config.realtime_prio = config.realtime_prio;
+    return net_config;
+}
+
+} // namespace
+
 Context::Context(const ContextConfig& config, core::IArena& arena)
     : arena_(arena)
     , packet_pool_("packet_pool", arena_)
@@ -23,7 +33,8 @@ Context::Context(const ContextConfig& config, core::IArena& arena)
           "frame_buffer_pool", arena_, sizeof(core::Buffer) + config.max_frame_size)
     , processor_map_(arena_)
     , encoding_map_(arena_)
-    , network_loop_(packet_pool_, packet_buffer_pool_, config.realtime_prio, arena_)
+    , network_loop_(
+          make_network_config(config), packet_pool_, packet_buffer_pool_, arena_)
     , control_loop_(network_loop_, arena_)
     , init_status_(status::NoStatus) {
     roc_log(LogDebug, "context: initializing");

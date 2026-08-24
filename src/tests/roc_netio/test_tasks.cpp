@@ -27,6 +27,8 @@ core::HeapArena arena;
 core::SlabPool<core::Buffer> buffer_pool("buffer_pool", arena, MaxBufSize);
 core::SlabPool<packet::Packet> packet_pool("packet_pool", arena);
 
+NetworkConfig network_config;
+
 UdpConfig make_receiver_config(const char* ip, int port) {
     UdpConfig config;
     CHECK(config.bind_address.set_host_port(address::Family_IPv4, ip, port));
@@ -150,8 +152,7 @@ private:
 TEST_GROUP(tasks) {};
 
 TEST(tasks, synchronous_add) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     UdpConfig config = make_receiver_config("127.0.0.1", 0);
@@ -168,8 +169,7 @@ TEST(tasks, synchronous_add) {
 }
 
 TEST(tasks, synchronous_add_recv_remove) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     UdpConfig config = make_receiver_config("127.0.0.1", 0);
@@ -197,8 +197,7 @@ TEST(tasks, synchronous_add_recv_remove) {
 }
 
 TEST(tasks, asynchronous_add) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     UdpConfig config = make_receiver_config("127.0.0.1", 0);
@@ -219,8 +218,7 @@ TEST(tasks, asynchronous_add) {
 }
 
 TEST(tasks, asynchronous_add_recv_remove) {
-    NetworkLoop net_loop(packet_pool, buffer_pool, netio::NetworkLoop::DEFAULT_PRIORITY,
-                         arena);
+    NetworkLoop net_loop(network_config, packet_pool, buffer_pool, arena);
     LONGS_EQUAL(status::StatusOK, net_loop.init_status());
 
     UdpConfig config = make_receiver_config("127.0.0.1", 0);
