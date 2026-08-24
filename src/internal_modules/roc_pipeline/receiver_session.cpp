@@ -296,6 +296,8 @@ status::StatusCode ReceiverSession::refresh(core::nanoseconds_t current_time,
         return fail_status_;
     }
 
+    latency_monitor_->refresh(current_time);
+
     return status::StatusOK;
 }
 

@@ -85,6 +85,13 @@ public:
     virtual ROC_NODISCARD status::StatusCode
     read(Frame& frame, packet::stream_timestamp_t duration, FrameReadMode mode);
 
+    //! Report current time.
+    //! @remarks
+    //!  Pipeline invokes this method before reading each frame.
+    //!  Until it's invoked for the first time, metrics that need current
+    //!  time (like niq_stalling) are not computed.
+    void refresh(core::nanoseconds_t current_time);
+
     //! Report playback timestamp of last frame returned by read.
     //! @remarks
     //!  Pipeline invokes this method after adding last frame to
@@ -117,6 +124,7 @@ private:
     ResamplerReader* resampler_;
     const bool enable_scaling_;
 
+    core::nanoseconds_t current_time_;
     core::nanoseconds_t capture_ts_;
 
     const SampleSpec packet_sample_spec_;

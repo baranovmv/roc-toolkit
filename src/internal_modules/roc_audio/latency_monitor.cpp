@@ -34,6 +34,7 @@ LatencyMonitor::LatencyMonitor(IFrameReader& frame_reader,
     , fec_reader_(fec_reader)
     , resampler_(resampler)
     , enable_scaling_(latency_config.tuner_profile != audio::LatencyTunerProfile_Intact)
+    , current_time_(0)
     , capture_ts_(0)
     , packet_sample_spec_(packet_sample_spec)
     , frame_sample_spec_(frame_sample_spec)
@@ -84,6 +85,14 @@ status::StatusCode LatencyMonitor::read(Frame& frame,
     post_read_(frame);
 
     return status::StatusOK;
+}
+
+void LatencyMonitor::refresh(const core::nanoseconds_t current_time) {
+    roc_panic_if(init_status_ != status::StatusOK);
+
+    // this method is called before reading next frame
+    // now we know current time and can use it to compute metrics
+    current_time_ = current_time;
 }
 
 void LatencyMonitor::reclock(const core::nanoseconds_t playback_timestamp) {
@@ -146,10 +155,8 @@ void LatencyMonitor::compute_niq_latency_() {
 
     // compute delay since last packet
     const core::nanoseconds_t rts = latest_packet->receive_timestamp();
-    const core::nanoseconds_t now = core::timestamp(core::ClockUnix);
-
-    if (rts > 0 && rts < now) {
-        latency_metrics_.niq_stalling = now - rts;
+    if (rts > 0 && rts < current_time_) {
+        latency_metrics_.niq_stalling = current_time_ - rts;
     }
 }
 
