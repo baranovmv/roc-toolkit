@@ -31,11 +31,18 @@ struct IoConfig {
     //! Duration of the internal frames, in nanoseconds.
     core::nanoseconds_t frame_length;
 
+    //! Priority of the thread running the I/O pump.
+    //! @remarks
+    //!  If non-zero, pump thread is switched to real-time scheduling policy
+    //!  with this priority. Should be in range [0; 99]. Requires privileges.
+    int realtime_prio;
+
     //! Initialize.
     IoConfig()
         : sample_spec()
         , latency(0)
-        , frame_length(0) {
+        , frame_length(0)
+        , realtime_prio(0) {
     }
 };
 

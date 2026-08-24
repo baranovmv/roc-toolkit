@@ -77,19 +77,21 @@ bool build_io_config(const gengetopt_args_info& args, sndio::IoConfig& io_config
         }
     }
 
+    if (args.real_time_arg != 0) {
+        if (args.real_time_arg < 0 || args.real_time_arg >= 100) {
+            roc_log(LogError, "invalid --real-time: should be in range [0..99]");
+            return false;
+        }
+        io_config.realtime_prio = args.real_time_arg;
+    }
+
     return true;
 }
 
 bool build_context_config(const gengetopt_args_info& args,
                           const sndio::IoConfig& io_config,
                           node::ContextConfig& context_config) {
-    if (args.real_time_arg != 0) {
-        if (args.real_time_arg < 0 || args.real_time_arg >= 100) {
-            roc_log(LogError, "invalid --real-time: should be in range [0..99]");
-            return false;
-        }
-        context_config.realtime_prio = args.real_time_arg;
-    }
+    context_config.realtime_prio = io_config.realtime_prio;
 
     if (args.max_packet_size_given) {
         if (!core::parse_size(args.max_packet_size_arg, context_config.max_packet_size)) {
@@ -713,7 +715,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    const status::StatusCode status = pump.run(args.real_time_arg);
+    const status::StatusCode status = pump.run();
     if (status != status::StatusOK) {
         roc_log(LogError, "io pump failed: status=%s", status::code_to_str(status));
         return 1;

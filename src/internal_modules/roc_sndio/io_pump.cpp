@@ -34,6 +34,7 @@ IoPump::IoPump(core::IPool& frame_pool,
     , current_source_(&source)
     , sink_(sink)
     , sample_spec_(io_config.sample_spec)
+    , realtime_prio_(io_config.realtime_prio)
     , frame_size_(0)
     , frame_duration_(0)
     , mode_(mode)
@@ -68,10 +69,10 @@ status::StatusCode IoPump::init_status() const {
     return init_status_;
 }
 
-status::StatusCode IoPump::run(const int realtime_priority) {
+status::StatusCode IoPump::run() {
     roc_log(LogDebug, "io pump: starting main loop");
 
-    if (realtime_priority > 0 && !core::Thread::enable_realtime(realtime_priority)) {
+    if (realtime_prio_ > 0 && !core::Thread::enable_realtime(realtime_prio_)) {
         roc_log(LogError,
                 "io pump: can't elevate realtime priority, may need to be root");
         return status::StatusErrThread;

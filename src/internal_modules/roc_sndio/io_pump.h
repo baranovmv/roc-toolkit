@@ -59,7 +59,7 @@ public:
     //! @remarks
     //!  Run until the stop() is called or, if oneshot mode is enabled,
     //!  the source becomes inactive.
-    ROC_NODISCARD status::StatusCode run(const int realtime_priority = 0);
+    ROC_NODISCARD status::StatusCode run();
 
     //! Stop the pump.
     //! @remarks
@@ -81,6 +81,7 @@ private:
     ISink& sink_;
 
     const audio::SampleSpec sample_spec_;
+    const int realtime_prio_;
 
     audio::FramePtr frame_;
     size_t frame_size_;
