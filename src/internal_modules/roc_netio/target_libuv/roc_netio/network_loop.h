@@ -33,6 +33,7 @@
 #include "roc_netio/iconn_handler.h"
 #include "roc_netio/inetwork_task_completer.h"
 #include "roc_netio/iterminate_handler.h"
+#include "roc_netio/network_config.h"
 #include "roc_netio/network_task.h"
 #include "roc_netio/resolver.h"
 #include "roc_netio/tcp_connection_port.h"
@@ -54,8 +55,6 @@ class NetworkLoop : private ITerminateHandler,
 public:
     //! Opaque port handle.
     typedef struct PortHandle* PortHandle;
-
-    enum { DEFAULT_PRIORITY = 0 };
 
     //! Subclasses for specific tasks.
     class Tasks {
@@ -199,9 +198,9 @@ public:
     //! Initialize.
     //! @remarks
     //!  Start background thread if the object was successfully constructed.
-    NetworkLoop(core::IPool& packet_pool,
+    NetworkLoop(const NetworkConfig& net_config,
+                core::IPool& packet_pool,
                 core::IPool& buffer_pool,
-                const int realtime_prio,
                 core::IArena& arena);
 
     //! Destroy. Stop all receivers and senders.
@@ -261,8 +260,8 @@ private:
     void task_remove_port_(NetworkTask&);
     void task_resolve_endpoint_address_(NetworkTask&);
 
+    const NetworkConfig net_config_;
     packet::PacketFactory packet_factory_;
-    const uint8_t realtime_prio_;
     core::IArena& arena_;
 
     bool started_;

@@ -110,12 +110,12 @@ NetworkLoop::Tasks::ResolveEndpointAddress::get_address() const {
     return resolve_req_.resolved_address;
 }
 
-NetworkLoop::NetworkLoop(core::IPool& packet_pool,
+NetworkLoop::NetworkLoop(const NetworkConfig& net_config,
+                         core::IPool& packet_pool,
                          core::IPool& buffer_pool,
-                         const int realtime_prio,
                          core::IArena& arena)
-    : packet_factory_(packet_pool, buffer_pool)
-    , realtime_prio_(realtime_prio)
+    : net_config_(net_config)
+    , packet_factory_(packet_pool, buffer_pool)
     , arena_(arena)
     , started_(false)
     , thr_init_cond_(thr_init_mutex_)
@@ -299,7 +299,8 @@ void NetworkLoop::handle_resolved(ResolverRequest& req) {
 void NetworkLoop::run() {
     roc_log(LogDebug, "network loop: starting event loop");
 
-    if (realtime_prio_ > 0 && !Thread::enable_realtime(realtime_prio_)) {
+    if (net_config_.realtime_prio > 0
+        && !Thread::enable_realtime(net_config_.realtime_prio)) {
         core::Mutex::Lock lock(thr_init_mutex_);
 
         roc_log(LogError,
