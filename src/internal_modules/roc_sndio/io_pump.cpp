@@ -70,15 +70,16 @@ status::StatusCode IoPump::init_status() const {
 
 status::StatusCode IoPump::run(const int realtime_priority) {
     roc_log(LogDebug, "io pump: starting main loop");
-    status::StatusCode code = status::NoStatus;
 
     if (realtime_priority > 0 && !core::Thread::enable_realtime(realtime_priority)) {
-        roc_log(LogError, "io pump: can't set realtime priority. May need to be root");
-        code = status::StatusFailedRealtime;
-        return code;
+        roc_log(LogError,
+                "io pump: can't elevate realtime priority, may need to be root");
+        return status::StatusErrThread;
     } else {
-        roc_log(LogDebug, "io pump: elevated realtime priority");
+        roc_log(LogNote, "io pump: elevated realtime priority");
     }
+
+    status::StatusCode code = status::NoStatus;
 
     for (;;) {
         // Transfer one frame from source to sink.

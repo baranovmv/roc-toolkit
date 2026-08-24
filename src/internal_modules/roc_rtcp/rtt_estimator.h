@@ -58,7 +58,7 @@ struct RttMetrics {
 
 //! Round-trip time estimator.
 //! Created inside rtcp::Reporter for each RTP stream.
-//! Continously computes RTT and clock offset based on LSR/DLSR
+//! Continuously computes RTT and clock offset based on LSR/DLSR
 //! or LRR/DLRR timestamps.
 class RttEstimator {
 public:
