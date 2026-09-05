@@ -12,6 +12,7 @@
 
 #include "roc_core/log.h"
 #include "roc_core/scoped_ptr.h"
+#include "roc_core/time.h"
 #include "roc_node/receiver.h"
 #include "roc_status/code_to_str.h"
 
@@ -146,6 +147,67 @@ int roc_receiver_unlink(roc_receiver* receiver, roc_slot slot) {
     }
 
     return 0;
+}
+
+int roc_receiver_get_state(roc_receiver* receiver, roc_state* result) {
+    if (!receiver) {
+        roc_log(LogError,
+                "roc_receiver_get_state(): invalid arguments: receiver is null");
+        return -1;
+    }
+
+    if (!result) {
+        roc_log(LogError, "roc_receiver_get_state(): invalid arguments: result is null");
+        return -1;
+    }
+
+    node::Receiver* imp_receiver = (node::Receiver*)receiver;
+
+    if (!api::state_to_user(*result, imp_receiver->get_state())) {
+        roc_log(LogError, "roc_receiver_get_state(): operation failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+int roc_receiver_poll(roc_receiver* receiver, unsigned int states, long long timeout) {
+    if (!receiver) {
+        roc_log(LogError, "roc_receiver_poll(): invalid arguments: receiver is null");
+        return -1;
+    }
+
+    unsigned imp_states = 0;
+    if (!api::state_mask_from_user(imp_states, states)) {
+        roc_log(LogError, "roc_receiver_poll(): invalid arguments: bad states");
+        return -1;
+    }
+
+    node::Receiver* imp_receiver = (node::Receiver*)receiver;
+
+    core::nanoseconds_t deadline = 0;
+
+    if (timeout > 0) {
+        deadline = api::deadline_from_timeout(timeout);
+    } else if (timeout == 0) {
+        // Zero timeout means to check the state without blocking, while a
+        // non-positive deadline would mean to block forever.
+        return ((unsigned)imp_receiver->get_state() & imp_states) != 0 ? 1 : 0;
+    }
+
+    const status::StatusCode code = imp_receiver->poll(imp_states, deadline);
+
+    if (code == status::StatusTimeout) {
+        return 0;
+    }
+
+    if (code != status::StatusOK) {
+        roc_log(LogError, "roc_receiver_poll(): operation failed: status=%s",
+                status::code_to_str(code));
+        return -1;
+    }
+
+    return 1;
 }
 
 int roc_receiver_query(roc_receiver* receiver,

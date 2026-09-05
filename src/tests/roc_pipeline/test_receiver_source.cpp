@@ -228,8 +228,7 @@ public:
         , result_(status::NoStatus) {
     }
 
-    void init(ReceiverSource& source, unsigned state_mask,
-              core::nanoseconds_t deadline) {
+    void init(ReceiverSource& source, unsigned state_mask, core::nanoseconds_t deadline) {
         source_ = &source;
         state_mask_ = state_mask;
         deadline_ = deadline;
@@ -4684,8 +4683,7 @@ TEST(receiver_source, poll_matching_state) {
 
     const core::nanoseconds_t start = core::timestamp(core::ClockMonotonic);
 
-    LONGS_EQUAL(status::StatusOK,
-                receiver.poll(sndio::DeviceState_Idle, NoDeadline));
+    LONGS_EQUAL(status::StatusOK, receiver.poll(sndio::DeviceState_Idle, NoDeadline));
 
     CHECK(core::timestamp(core::ClockMonotonic) - start < MaxImmediate);
 }

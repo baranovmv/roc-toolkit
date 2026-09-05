@@ -194,8 +194,7 @@ bool ReceiverLoop::has_poll() const {
     return source_.has_poll();
 }
 
-status::StatusCode ReceiverLoop::poll(unsigned state_mask,
-                                      core::nanoseconds_t deadline) {
+status::StatusCode ReceiverLoop::poll(unsigned state_mask, core::nanoseconds_t deadline) {
     return source_.poll(state_mask, deadline);
 }
 

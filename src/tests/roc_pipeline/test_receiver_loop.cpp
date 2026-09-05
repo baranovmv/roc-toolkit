@@ -130,8 +130,7 @@ public:
         , result_(status::NoStatus) {
     }
 
-    void init(sndio::ISource& source, unsigned state_mask,
-              core::nanoseconds_t deadline) {
+    void init(sndio::ISource& source, unsigned state_mask, core::nanoseconds_t deadline) {
         source_ = &source;
         state_mask_ = state_mask;
         deadline_ = deadline;
@@ -247,8 +246,7 @@ TEST(receiver_loop, poll_does_not_block_read) {
         audio::FramePtr frame = frame_factory.allocate_frame_no_buffer();
         CHECK(frame);
 
-        LONGS_EQUAL(status::StatusOK,
-                    source.read(*frame, FrameSamples, audio::ModeHard));
+        LONGS_EQUAL(status::StatusOK, source.read(*frame, FrameSamples, audio::ModeHard));
     }
 
     CHECK(source.state() == sndio::DeviceState_Idle);

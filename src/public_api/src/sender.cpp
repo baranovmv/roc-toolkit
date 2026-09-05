@@ -12,6 +12,7 @@
 
 #include "roc_core/log.h"
 #include "roc_core/scoped_ptr.h"
+#include "roc_core/time.h"
 #include "roc_node/sender.h"
 #include "roc_status/code_to_str.h"
 
@@ -174,6 +175,66 @@ int roc_sender_unlink(roc_sender* sender, roc_slot slot) {
     }
 
     return 0;
+}
+
+int roc_sender_get_state(roc_sender* sender, roc_state* result) {
+    if (!sender) {
+        roc_log(LogError, "roc_sender_get_state(): invalid arguments: sender is null");
+        return -1;
+    }
+
+    if (!result) {
+        roc_log(LogError, "roc_sender_get_state(): invalid arguments: result is null");
+        return -1;
+    }
+
+    node::Sender* imp_sender = (node::Sender*)sender;
+
+    if (!api::state_to_user(*result, imp_sender->get_state())) {
+        roc_log(LogError, "roc_sender_get_state(): operation failed");
+        return -1;
+    }
+
+    return 0;
+}
+
+int roc_sender_poll(roc_sender* sender, unsigned int states, long long timeout) {
+    if (!sender) {
+        roc_log(LogError, "roc_sender_poll(): invalid arguments: sender is null");
+        return -1;
+    }
+
+    unsigned imp_states = 0;
+    if (!api::state_mask_from_user(imp_states, states)) {
+        roc_log(LogError, "roc_sender_poll(): invalid arguments: bad states");
+        return -1;
+    }
+
+    node::Sender* imp_sender = (node::Sender*)sender;
+
+    core::nanoseconds_t deadline = 0;
+
+    if (timeout > 0) {
+        deadline = api::deadline_from_timeout(timeout);
+    } else if (timeout == 0) {
+        // Zero timeout means to check the state without blocking, while a
+        // non-positive deadline would mean to block forever.
+        return ((unsigned)imp_sender->get_state() & imp_states) != 0 ? 1 : 0;
+    }
+
+    const status::StatusCode code = imp_sender->poll(imp_states, deadline);
+
+    if (code == status::StatusTimeout) {
+        return 0;
+    }
+
+    if (code != status::StatusOK) {
+        roc_log(LogError, "roc_sender_poll(): operation failed: status=%s",
+                status::code_to_str(code));
+        return -1;
+    }
+
+    return 1;
 }
 
 int roc_sender_write(roc_sender* sender, const roc_frame* frame) {

@@ -20,6 +20,7 @@
 #include "roc/frame.h"
 #include "roc/metrics.h"
 #include "roc/platform.h"
+#include "roc/state.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -312,6 +313,57 @@ ROC_API int roc_sender_query(roc_sender* sender,
  *  - returns a negative value if the slot does not exist
  */
 ROC_API int roc_sender_unlink(roc_sender* sender, roc_slot slot);
+
+/** Get current sender state.
+ *
+ * Retrieves the state of the sender as a whole, not of an individual slot.
+ *
+ * **Parameters**
+ *  - \p sender should point to an opened sender
+ *  - \p result defines where to write the state
+ *
+ * **Returns**
+ *  - returns zero if the state was successfully retrieved
+ *  - returns a negative value if the arguments are invalid
+ *
+ * **Ownership**
+ *  - doesn't take or share the ownership of \p result; it may be safely deallocated
+ *    after the function returns
+ */
+ROC_API int roc_sender_get_state(roc_sender* sender, roc_state* result);
+
+/** Wait until sender reaches one of the desired states.
+ *
+ * Blocks until the sender state becomes one of the states from \p states, or until
+ * \p timeout expires. The state of the sender as a whole is polled, not of an
+ * individual slot.
+ *
+ * The sender may be polled from any thread, concurrently with other operations,
+ * including writing frames. Polling never blocks other operations.
+ *
+ * Note that the sender becomes \ref ROC_STATE_ACTIVE when the first slot is
+ * connected using roc_sender_connect(), and stays active until it is broken, closed,
+ * or all its slots are removed using roc_sender_unlink(). It does not become idle
+ * when the user stops writing frames.
+ *
+ * If the sender becomes broken or closed while waiting, and \p states doesn't
+ * include \ref ROC_STATE_BROKEN or \ref ROC_STATE_CLOSED, the function fails instead
+ * of waiting forever.
+ *
+ * **Parameters**
+ *  - \p sender should point to an opened sender
+ *  - \p states is a bitmask of one or more \ref roc_state values
+ *  - \p timeout defines maximum waiting time, in nanoseconds; zero means to check
+ *    the state and return immediately; negative value means no timeout
+ *
+ * **Returns**
+ *  - returns one if the sender reached one of the desired states
+ *  - returns zero if the timeout expired
+ *  - returns a negative value if the arguments are invalid
+ *  - returns a negative value if the sender became broken or closed and it was not
+ *    requested in \p states
+ */
+ROC_API int roc_sender_poll(roc_sender* sender, unsigned int states, long long timeout);
 
 /** Encode samples to packets and transmit them to the receiver.
  *

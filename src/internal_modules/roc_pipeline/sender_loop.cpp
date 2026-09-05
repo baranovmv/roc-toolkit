@@ -194,8 +194,7 @@ bool SenderLoop::has_poll() const {
     return sink_.has_poll();
 }
 
-status::StatusCode SenderLoop::poll(unsigned state_mask,
-                                    core::nanoseconds_t deadline) {
+status::StatusCode SenderLoop::poll(unsigned state_mask, core::nanoseconds_t deadline) {
     return sink_.poll(state_mask, deadline);
 }
 

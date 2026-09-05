@@ -17,6 +17,9 @@
 #include "roc_audio/resampler_config.h"
 #include "roc_core/attributes.h"
 #include "roc_core/log.h"
+#include "roc_core/macro_helpers.h"
+#include "roc_core/panic.h"
+#include "roc_core/time.h"
 
 namespace roc {
 namespace api {
@@ -968,6 +971,75 @@ bool proto_to_user(roc_protocol& out, address::Protocol in) {
     }
 
     return false;
+}
+
+bool state_mask_from_user(unsigned& out, unsigned in) {
+    const unsigned known_states = ROC_STATE_ACTIVE | ROC_STATE_IDLE | ROC_STATE_PAUSED
+        | ROC_STATE_BROKEN | ROC_STATE_CLOSED;
+
+    if ((in & ~known_states) != 0) {
+        return false;
+    }
+
+    out = 0;
+
+    if ((in & ROC_STATE_ACTIVE) != 0) {
+        out |= sndio::DeviceState_Active;
+    }
+    if ((in & ROC_STATE_IDLE) != 0) {
+        out |= sndio::DeviceState_Idle;
+    }
+    if ((in & ROC_STATE_PAUSED) != 0) {
+        out |= sndio::DeviceState_Paused;
+    }
+    if ((in & ROC_STATE_BROKEN) != 0) {
+        out |= sndio::DeviceState_Broken;
+    }
+    if ((in & ROC_STATE_CLOSED) != 0) {
+        out |= sndio::DeviceState_Closed;
+    }
+
+    return true;
+}
+
+bool state_to_user(roc_state& out, sndio::DeviceState in) {
+    switch (enum_from_user(in)) {
+    case sndio::DeviceState_Active:
+        out = ROC_STATE_ACTIVE;
+        return true;
+
+    case sndio::DeviceState_Idle:
+        out = ROC_STATE_IDLE;
+        return true;
+
+    case sndio::DeviceState_Paused:
+        out = ROC_STATE_PAUSED;
+        return true;
+
+    case sndio::DeviceState_Broken:
+        out = ROC_STATE_BROKEN;
+        return true;
+
+    case sndio::DeviceState_Closed:
+        out = ROC_STATE_CLOSED;
+        return true;
+    }
+
+    return false;
+}
+
+core::nanoseconds_t deadline_from_timeout(long long timeout) {
+    roc_panic_if(timeout <= 0);
+
+    const core::nanoseconds_t now = core::timestamp(core::ClockMonotonic);
+    const core::nanoseconds_t deadline = now + (core::nanoseconds_t)timeout;
+
+    // Overflow means "so far away that it never expires".
+    if (deadline < now) {
+        return ROC_MAX_OF(core::nanoseconds_t);
+    }
+
+    return deadline;
 }
 
 ROC_NOSANITIZE

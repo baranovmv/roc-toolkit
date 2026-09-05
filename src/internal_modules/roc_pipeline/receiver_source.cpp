@@ -239,8 +239,7 @@ status::StatusCode ReceiverSource::poll(unsigned state_mask,
 
     // Halted pipeline never changes state again, so wake up on it even if the
     // caller didn't ask for it, instead of blocking forever.
-    const unsigned halt_mask =
-        sndio::DeviceState_Broken | sndio::DeviceState_Closed;
+    const unsigned halt_mask = sndio::DeviceState_Broken | sndio::DeviceState_Closed;
 
     if (!state_tracker_.wait_state(state_mask | halt_mask, deadline)) {
         return status::StatusTimeout;
