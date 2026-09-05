@@ -966,5 +966,44 @@ TEST(loopback_sender_2_receiver, metrics_connections_slots) {
     sender.stop_and_join();
 }
 
+// Receiver becomes active when the first packet arrives, even though nobody
+// reads frames from it. This is what allows the user to release the audio
+// device while waiting for a sender to appear.
+TEST(loopback_sender_2_receiver, poll_active_without_reading) {
+    enum {
+        Flags = test::FlagInfinite,
+        SampleRate = 44100,
+        FrameChans = 2,
+        PacketChans = 2
+    };
+
+    init_config(Flags, SampleRate, FrameChans, PacketChans);
+
+    test::Context context;
+
+    test::Receiver receiver(context, receiver_conf, sample_step, FrameChans,
+                            test::FrameSamples, Flags);
+
+    receiver.bind();
+
+    roc_state state = ROC_STATE_BROKEN;
+    LONGS_EQUAL(0, roc_receiver_get_state(receiver.get(), &state));
+    LONGS_EQUAL(ROC_STATE_IDLE, state);
+
+    test::Sender sender(context, sender_conf, sample_step, FrameChans, test::FrameSamples,
+                        Flags);
+
+    sender.connect(receiver.source_endpoint(), NULL, NULL);
+
+    CHECK(sender.start());
+
+    LONGS_EQUAL(1, roc_receiver_poll(receiver.get(), ROC_STATE_ACTIVE, -1));
+
+    LONGS_EQUAL(0, roc_receiver_get_state(receiver.get(), &state));
+    LONGS_EQUAL(ROC_STATE_ACTIVE, state);
+
+    sender.stop_and_join();
+}
+
 } // namespace api
 } // namespace roc
