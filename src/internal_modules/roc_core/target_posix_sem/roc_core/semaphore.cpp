@@ -35,7 +35,6 @@ Semaphore::~Semaphore() {
 }
 
 bool Semaphore::timed_wait(nanoseconds_t deadline) {
-    printf("Enter function of timed_wait");
     if (deadline < 0) {
         roc_panic("semaphore: unexpected negative deadline");
     }

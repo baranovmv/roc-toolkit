@@ -7,7 +7,6 @@
  */
 
 #include "roc_pipeline/state_tracker.h"
-#include "roc_core/log.h"
 #include "roc_core/panic.h"
 
 namespace roc {
@@ -23,59 +22,65 @@ StateTracker::StateTracker()
     , waiting_con_(mutex_) {
 }
 
-// StateTracker::~StateTracker() {
-//     mutex_.unlock();
-// }
-
-// This method should block until the state becomes any of the states specified by the
-// mask, or deadline expires. E.g. if mask is ACTIVE | PAUSED, it should block until state
-// becomes either ACTIVE or PAUSED. (Currently only two states are used, but later more
-// states will be needed). Deadline should be an absolute timestamp.
-
-// Questions:
-// - When should the function return true vs false
-bool StateTracker::wait_state(unsigned int state_mask, core::nanoseconds_t deadline) {
-    // If no state is specified in state_mask, return immediately
+bool StateTracker::wait_state(unsigned state_mask, core::nanoseconds_t deadline) {
     if (state_mask == 0) {
         return true;
     }
 
+    bool sem_owner = false;
+    bool matched = false;
+
     mutex_.lock();
-    for (;;) {
-        // roc_log(LogDebug, "loop top, state=%d, now=%lld, deadline=%lld", get_state(),
-        // core::timestamp(core::ClockMonotonic), deadline);
+    while (true) {
+        const core::nanoseconds_t now = core::timestamp(core::ClockMonotonic);
+        const core::nanoseconds_t timeout = deadline - now;
+
         if (static_cast<unsigned>(get_state()) & state_mask) {
-            mutex_.unlock();
-            return true;
+            matched = true;
+            break;
         }
 
-        if (deadline >= 0 && deadline <= core::timestamp(core::ClockMonotonic)) {
-            mutex_.unlock();
-            return false;
+        if (deadline > 0 && timeout <= 0) {
+            break;
         }
 
-        if (sem_is_occupied_.compare_exchange(0, 1)) {
-            if (deadline >= 0) {
-                mutex_.unlock();
+        if (!sem_owner) {
+            sem_owner = sem_is_occupied_.compare_exchange(0, 1);
+            if (sem_owner) {
+                // Re-check state now that flag is published, otherwise a signal made
+                // right before the flag was set would be lost.
+                continue;
+            }
+        }
+
+        if (sem_owner) {
+            mutex_.unlock();
+            if (deadline > 0) {
                 (void)sem_.timed_wait(deadline);
-
             } else {
-                mutex_.unlock();
                 sem_.wait();
             }
-
             mutex_.lock();
-            sem_is_occupied_ = 0;
             waiting_con_.broadcast();
-
         } else {
-            if (deadline >= 0) {
-                (void)waiting_con_.timed_wait(deadline);
+            if (deadline > 0) {
+                // Unlike Semaphore, Cond expects relative timeout.
+                (void)waiting_con_.timed_wait(timeout);
             } else {
                 waiting_con_.wait();
             }
         }
     }
+
+    if (sem_owner) {
+        // Hand semaphore ownership over to one of the condvar waiters.
+        sem_is_occupied_ = 0;
+        waiting_con_.broadcast();
+    }
+
+    mutex_.unlock();
+
+    return matched;
 }
 
 sndio::DeviceState StateTracker::get_state() const {
@@ -114,10 +119,12 @@ bool StateTracker::is_closed() const {
 
 void StateTracker::set_broken() {
     halt_state_ = sndio::DeviceState_Broken;
+    signal_state_change_();
 }
 
 void StateTracker::set_closed() {
     halt_state_ = sndio::DeviceState_Closed;
+    signal_state_change_();
 }
 
 size_t StateTracker::num_sessions() const {
@@ -126,7 +133,7 @@ size_t StateTracker::num_sessions() const {
 
 void StateTracker::register_session() {
     if (active_sessions_++ == 0) {
-        signal_state_change();
+        signal_state_change_();
     }
 }
 
@@ -135,17 +142,13 @@ void StateTracker::unregister_session() {
     if (prev_sessions == 0) {
         roc_panic("state tracker: unpaired register/unregister session");
     } else if (prev_sessions == 1 && pending_packets_ == 0) {
-        signal_state_change();
+        signal_state_change_();
     }
-
-    // if (--active_sessions_ < 0) {
-    //     roc_panic("state tracker: unpaired register/unregister session");
-    // }
 }
 
 void StateTracker::register_packet() {
     if (pending_packets_++ == 0 && active_sessions_ == 0) {
-        signal_state_change();
+        signal_state_change_();
     }
 }
 
@@ -154,20 +157,12 @@ void StateTracker::unregister_packet() {
     if (prev_packets == 0) {
         roc_panic("state tracker: unpaired register/unregister packet");
     } else if (prev_packets == 1 && active_sessions_ == 0) {
-        signal_state_change();
+        signal_state_change_();
     }
-
-    // if (--pending_packets_ < 0) {
-    //     roc_panic("state tracker: unpaired register/unregister packet");
-    // }
 }
 
-void StateTracker::signal_state_change() {
-    // if (waiting_mask_ != 0 && (static_cast<unsigned>(get_state()) & waiting_mask_)) {
-    //     sem_.post();
-    // }
+void StateTracker::signal_state_change_() {
     if (sem_is_occupied_) {
-        roc_log(LogDebug, "signaling");
         sem_.post();
     }
 }
