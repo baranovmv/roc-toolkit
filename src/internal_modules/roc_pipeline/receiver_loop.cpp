@@ -187,6 +187,18 @@ status::StatusCode ReceiverLoop::resume() {
     return source_.resume();
 }
 
+// Deliberately not taking source_mutex_: poll() blocks for arbitrarily long, and
+// read() holds that mutex, so locking here would stall the frame reader.
+// Polling touches only StateTracker, which is thread-safe on its own.
+bool ReceiverLoop::has_poll() const {
+    return source_.has_poll();
+}
+
+status::StatusCode ReceiverLoop::poll(unsigned state_mask,
+                                      core::nanoseconds_t deadline) {
+    return source_.poll(state_mask, deadline);
+}
+
 bool ReceiverLoop::has_latency() const {
     core::Mutex::Lock lock(source_mutex_);
 

@@ -99,6 +99,37 @@ public:
     //!  Makes sense only if has_state() is true.
     virtual ROC_NODISCARD status::StatusCode resume();
 
+    //! Check if the device supports blocking until state change.
+    //! @remarks
+    //!  If true, poll() can be used to wait until state becomes one of
+    //!  the desired states.
+    virtual bool has_poll() const = 0;
+
+    //! Block until device state becomes one of the states from the mask.
+    //! @remarks
+    //!  @p state_mask is a combination of DeviceState values, e.g.
+    //!  DeviceState_Active | DeviceState_Idle. Empty mask means that there is
+    //!  nothing to wait for, and the method returns immediately.
+    //!
+    //!  @p deadline is an absolute timestamp in ClockMonotonic domain.
+    //!  Non-positive deadline means no deadline: the method blocks until the
+    //!  mask matches, however long that takes.
+    //!
+    //!  Device may be polled from any thread, concurrently with each other and
+    //!  with I/O. Polling never blocks I/O.
+    //! @returns
+    //!  - status::StatusOK if the state matched the mask
+    //!  - status::StatusTimeout if the deadline expired
+    //!  - status::StatusBadState if the device became broken or closed, and
+    //!    the mask didn't ask for those states
+    //! @note
+    //!  Remember that device state may be outdated immediately after this
+    //!  method returns.
+    //! @note
+    //!  Makes sense only if has_poll() is true.
+    virtual ROC_NODISCARD status::StatusCode poll(unsigned state_mask,
+                                                  core::nanoseconds_t deadline);
+
     //! Check if the device supports latency reports.
     //! @remarks
     //!  If true, latency() returns meaningful values.

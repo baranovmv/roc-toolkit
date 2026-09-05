@@ -224,6 +224,34 @@ status::StatusCode SenderSink::resume() {
     return status::StatusOK;
 }
 
+bool SenderSink::has_poll() const {
+    return true;
+}
+
+status::StatusCode SenderSink::poll(unsigned state_mask,
+                                    core::nanoseconds_t deadline) {
+    roc_panic_if(init_status_ != status::StatusOK);
+
+    if (state_mask == 0) {
+        return status::StatusOK;
+    }
+
+    // Halted pipeline never changes state again, so wake up on it even if the
+    // caller didn't ask for it, instead of blocking forever.
+    const unsigned halt_mask =
+        sndio::DeviceState_Broken | sndio::DeviceState_Closed;
+
+    if (!state_tracker_.wait_state(state_mask | halt_mask, deadline)) {
+        return status::StatusTimeout;
+    }
+
+    if ((state_mask & halt_mask) == 0 && !state_tracker_.is_usable()) {
+        return status::StatusBadState;
+    }
+
+    return status::StatusOK;
+}
+
 bool SenderSink::has_latency() const {
     return false;
 }
