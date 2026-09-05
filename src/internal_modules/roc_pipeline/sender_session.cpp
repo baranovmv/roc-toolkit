@@ -274,8 +274,11 @@ status::StatusCode SenderSession::refresh(core::nanoseconds_t current_time,
             if (code != status::StatusOK) {
                 return code;
             }
+
+            // Until we have send stream, communicator does not generate reports and
+            // its deadline does not advance, so don't report it to the caller.
+            next_deadline = rtcp_communicator_->generation_deadline(current_time);
         }
-        next_deadline = rtcp_communicator_->generation_deadline(current_time);
     }
 
     return status::StatusOK;

@@ -187,6 +187,19 @@ status::StatusCode ReceiverLoop::resume() {
     return source_.resume();
 }
 
+// Deliberately not taking source_mutex_: poll() blocks for arbitrarily long, and
+// read() holds that mutex, so locking here would stall the frame reader.
+// Polling touches only StateTracker, which is thread-safe on its own.
+bool ReceiverLoop::has_poll() const {
+    return source_.has_poll();
+}
+
+status::StatusCode ReceiverLoop::poll(unsigned event_mask,
+                                      unsigned& ret_events,
+                                      core::nanoseconds_t deadline) {
+    return source_.poll(event_mask, ret_events, deadline);
+}
+
 bool ReceiverLoop::has_latency() const {
     core::Mutex::Lock lock(source_mutex_);
 
@@ -279,17 +292,41 @@ status::StatusCode ReceiverLoop::process_subframe_imp(audio::Frame& frame,
                                                       audio::FrameReadMode mode) {
     status::StatusCode code = status::NoStatus;
 
-    // TODO(gh-674): handle returned deadline and schedule refresh
     core::nanoseconds_t next_deadline = 0;
 
-    if ((code = source_.refresh(core::timestamp(core::ClockUnix), &next_deadline))
-        != status::StatusOK) {
+    if ((code = refresh_(next_deadline)) != status::StatusOK) {
         return code;
     }
+
+    set_refresh_deadline(next_deadline);
 
     if ((code = source_.read(frame, duration, mode)) != status::StatusOK) {
         return code;
     }
+
+    return status::StatusOK;
+}
+
+status::StatusCode ReceiverLoop::process_refresh_imp(core::nanoseconds_t& next_deadline) {
+    return refresh_(next_deadline);
+}
+
+status::StatusCode ReceiverLoop::refresh_(core::nanoseconds_t& next_deadline) {
+    // Both timestamps should be obtained at the same point of time, so that
+    // the deadline reported below does not depend on refresh duration.
+    const core::nanoseconds_t unix_time = core::timestamp(core::ClockUnix);
+    const core::nanoseconds_t mono_time = core::timestamp(core::ClockMonotonic);
+
+    core::nanoseconds_t unix_deadline = 0;
+
+    const status::StatusCode code = source_.refresh(unix_time, &unix_deadline);
+    if (code != status::StatusOK) {
+        return code;
+    }
+
+    // Source reports deadline in unix clock domain, while pipeline loop
+    // schedules asynchronous work in monotonic clock domain.
+    next_deadline = unix_deadline == 0 ? 0 : mono_time + (unix_deadline - unix_time);
 
     return status::StatusOK;
 }

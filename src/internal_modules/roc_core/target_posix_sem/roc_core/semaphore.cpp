@@ -9,7 +9,6 @@
 #include "roc_core/semaphore.h"
 #include "roc_core/cpu_instructions.h"
 #include "roc_core/errno_to_str.h"
-#include "roc_core/log.h"
 #include "roc_core/panic.h"
 
 #include <errno.h>
@@ -53,7 +52,7 @@ bool Semaphore::timed_wait(nanoseconds_t deadline) {
         }
 
         if (errno != EINTR) {
-            roc_panic("semaphore: sem_wait(): %s", errno_to_str().c_str());
+            roc_panic("semaphore: sem_clockwait(): %s", errno_to_str().c_str());
         }
     }
 }
