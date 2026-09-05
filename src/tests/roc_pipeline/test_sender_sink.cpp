@@ -18,6 +18,7 @@
 #include "roc_packet/fifo_queue.h"
 #include "roc_pipeline/sender_sink.h"
 #include "roc_rtp/encoding_map.h"
+#include "roc_sndio/device_defs.h"
 
 // This file contains tests for SenderSink. SenderSink can be seen as a big
 // composite processor (consisting of chained smaller processors) that transforms
@@ -122,6 +123,15 @@ packet::IWriter* create_control_endpoint(SenderSlot* slot,
 void refresh_sink(SenderSink& sender_sink, core::nanoseconds_t refresh_ts) {
     LONGS_EQUAL(status::StatusOK, sender_sink.refresh(refresh_ts, NULL));
 }
+
+// Deadline value that means "block forever".
+const core::nanoseconds_t NoDeadline = -1;
+
+// Deadline offset for tests that expect the deadline to expire.
+const core::nanoseconds_t ShortTimeout = core::Millisecond * 10;
+
+// Upper bound for calls that must not block at all.
+const core::nanoseconds_t MaxImmediate = core::Millisecond * 100;
 
 } // namespace
 
@@ -949,6 +959,70 @@ TEST(sender_sink, reports_two_receivers) {
             n_reports++;
         }
     }
+}
+
+// Sender is idle until a transport endpoint is added, and stays active after
+// that, no matter whether frames are written or not.
+TEST(sender_sink, pipeline_state) {
+    init_with_defaults();
+
+    packet::FifoQueue queue;
+
+    SenderSink sender(make_config(), processor_map, encoding_map, packet_pool,
+                      packet_buffer_pool, frame_pool, frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, sender.init_status());
+
+    CHECK(sender.state() == sndio::DeviceState_Idle);
+
+    SenderSlot* slot = create_slot(sender);
+    create_transport_endpoint(slot, address::Iface_AudioSource, proto, dst_addr1, queue);
+
+    CHECK(sender.state() == sndio::DeviceState_Active);
+
+    test::FrameWriter frame_writer(sender, frame_factory);
+
+    for (size_t nf = 0; nf < ManyFrames; nf++) {
+        frame_writer.write_samples(SamplesPerFrame, input_sample_spec);
+        refresh_sink(sender, frame_writer.refresh_ts());
+
+        CHECK(sender.state() == sndio::DeviceState_Active);
+    }
+}
+
+TEST(sender_sink, poll_matching_state) {
+    init_with_defaults();
+
+    packet::FifoQueue queue;
+
+    SenderSink sender(make_config(), processor_map, encoding_map, packet_pool,
+                      packet_buffer_pool, frame_pool, frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, sender.init_status());
+
+    CHECK(sender.has_poll());
+
+    SenderSlot* slot = create_slot(sender);
+    create_transport_endpoint(slot, address::Iface_AudioSource, proto, dst_addr1, queue);
+
+    const core::nanoseconds_t start = core::timestamp(core::ClockMonotonic);
+
+    LONGS_EQUAL(status::StatusOK, sender.poll(sndio::DeviceState_Active, NoDeadline));
+
+    CHECK(core::timestamp(core::ClockMonotonic) - start < MaxImmediate);
+}
+
+TEST(sender_sink, poll_timeout) {
+    init_with_defaults();
+
+    SenderSink sender(make_config(), processor_map, encoding_map, packet_pool,
+                      packet_buffer_pool, frame_pool, frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, sender.init_status());
+
+    const core::nanoseconds_t deadline =
+        core::timestamp(core::ClockMonotonic) + ShortTimeout;
+
+    LONGS_EQUAL(status::StatusTimeout, sender.poll(sndio::DeviceState_Active, deadline));
+
+    CHECK(core::timestamp(core::ClockMonotonic) >= deadline);
 }
 
 } // namespace pipeline

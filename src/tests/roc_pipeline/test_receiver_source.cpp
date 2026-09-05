@@ -14,8 +14,10 @@
 
 #include "roc_address/interface.h"
 #include "roc_address/protocol.h"
+#include "roc_core/atomic_bool.h"
 #include "roc_core/heap_arena.h"
 #include "roc_core/slab_pool.h"
+#include "roc_core/thread.h"
 #include "roc_core/time.h"
 #include "roc_pipeline/receiver_source.h"
 #include "roc_rtp/encoding_map.h"
@@ -203,6 +205,59 @@ core::nanoseconds_t get_niq_latency(ReceiverSlot& receiver_slot) {
 
     return party_metrics.latency.niq_latency;
 }
+
+// Deadline value that means "block forever".
+const core::nanoseconds_t NoDeadline = -1;
+
+// Deadline offset for tests that expect the deadline to expire.
+const core::nanoseconds_t ShortTimeout = core::Millisecond * 10;
+
+// Upper bound for calls that must not block at all.
+const core::nanoseconds_t MaxImmediate = core::Millisecond * 100;
+
+// Time given to a freshly started thread to actually block inside poll().
+const core::nanoseconds_t SettleDelay = core::Microsecond * 100;
+
+// Calls poll() in a separate thread, so that the main thread can change state.
+class PollThread : public core::Thread {
+public:
+    PollThread()
+        : source_(NULL)
+        , state_mask_(0)
+        , deadline_(0)
+        , result_(status::NoStatus) {
+    }
+
+    void init(ReceiverSource& source, unsigned state_mask,
+              core::nanoseconds_t deadline) {
+        source_ = &source;
+        state_mask_ = state_mask;
+        deadline_ = deadline;
+    }
+
+    // Value returned by poll(); valid only after join().
+    status::StatusCode result() const {
+        return result_;
+    }
+
+    void wait_running() {
+        while (!running_) {
+            core::sleep_for(core::ClockMonotonic, core::Microsecond);
+        }
+    }
+
+private:
+    virtual void run() {
+        running_ = true;
+        result_ = source_->poll(state_mask_, deadline_);
+    }
+
+    ReceiverSource* source_;
+    unsigned state_mask_;
+    core::nanoseconds_t deadline_;
+    status::StatusCode result_;
+    core::AtomicBool running_;
+};
 
 } // namespace
 
@@ -4614,6 +4669,138 @@ TEST(receiver_source, pipeline_state) {
             break;
         }
     }
+}
+
+TEST(receiver_source, poll_matching_state) {
+    init_with_defaults();
+
+    ReceiverSource receiver(make_default_config(), processor_map, encoding_map,
+                            packet_pool, packet_buffer_pool, frame_pool,
+                            frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, receiver.init_status());
+
+    CHECK(receiver.has_poll());
+    CHECK(receiver.state() == sndio::DeviceState_Idle);
+
+    const core::nanoseconds_t start = core::timestamp(core::ClockMonotonic);
+
+    LONGS_EQUAL(status::StatusOK,
+                receiver.poll(sndio::DeviceState_Idle, NoDeadline));
+
+    CHECK(core::timestamp(core::ClockMonotonic) - start < MaxImmediate);
+}
+
+TEST(receiver_source, poll_empty_mask) {
+    init_with_defaults();
+
+    ReceiverSource receiver(make_default_config(), processor_map, encoding_map,
+                            packet_pool, packet_buffer_pool, frame_pool,
+                            frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, receiver.init_status());
+
+    const core::nanoseconds_t start = core::timestamp(core::ClockMonotonic);
+
+    LONGS_EQUAL(status::StatusOK, receiver.poll(0, NoDeadline));
+
+    CHECK(core::timestamp(core::ClockMonotonic) - start < MaxImmediate);
+}
+
+TEST(receiver_source, poll_timeout) {
+    init_with_defaults();
+
+    ReceiverSource receiver(make_default_config(), processor_map, encoding_map,
+                            packet_pool, packet_buffer_pool, frame_pool,
+                            frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, receiver.init_status());
+
+    const core::nanoseconds_t deadline =
+        core::timestamp(core::ClockMonotonic) + ShortTimeout;
+
+    LONGS_EQUAL(status::StatusTimeout,
+                receiver.poll(sndio::DeviceState_Active, deadline));
+
+    CHECK(core::timestamp(core::ClockMonotonic) >= deadline);
+}
+
+// Pipeline becomes active as soon as a packet arrives, without any read.
+// This is what allows the user to stop reading frames while waiting.
+TEST(receiver_source, poll_wakeup_on_packet) {
+    init_with_defaults();
+
+    ReceiverSource receiver(make_default_config(), processor_map, encoding_map,
+                            packet_pool, packet_buffer_pool, frame_pool,
+                            frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, receiver.init_status());
+
+    ReceiverSlot* slot = create_slot(receiver);
+    packet::IWriter* endpoint_writer =
+        create_transport_endpoint(slot, address::Iface_AudioSource, proto1, dst_addr1);
+
+    test::PacketWriter packet_writer(arena, *endpoint_writer, encoding_map,
+                                     packet_factory, src_id1, src_addr1, dst_addr1,
+                                     PayloadType_Ch2);
+
+    PollThread poller;
+    poller.init(receiver, sndio::DeviceState_Active, NoDeadline);
+
+    CHECK(poller.start());
+    poller.wait_running();
+    core::sleep_for(core::ClockMonotonic, SettleDelay);
+
+    packet_writer.write_packets(Latency / SamplesPerPacket, SamplesPerPacket,
+                                packet_sample_spec);
+
+    poller.join();
+
+    LONGS_EQUAL(status::StatusOK, poller.result());
+    CHECK(receiver.state() == sndio::DeviceState_Active);
+}
+
+// Waiting for a state that never comes must not hang when pipeline is closed.
+TEST(receiver_source, poll_wakeup_on_close) {
+    init_with_defaults();
+
+    ReceiverSource receiver(make_default_config(), processor_map, encoding_map,
+                            packet_pool, packet_buffer_pool, frame_pool,
+                            frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, receiver.init_status());
+
+    PollThread poller;
+    poller.init(receiver, sndio::DeviceState_Active, NoDeadline);
+
+    CHECK(poller.start());
+    poller.wait_running();
+    core::sleep_for(core::ClockMonotonic, SettleDelay);
+
+    LONGS_EQUAL(status::StatusOK, receiver.close());
+
+    poller.join();
+
+    LONGS_EQUAL(status::StatusBadState, poller.result());
+}
+
+TEST(receiver_source, poll_closed_state_requested) {
+    init_with_defaults();
+
+    ReceiverSource receiver(make_default_config(), processor_map, encoding_map,
+                            packet_pool, packet_buffer_pool, frame_pool,
+                            frame_buffer_pool, arena);
+    LONGS_EQUAL(status::StatusOK, receiver.init_status());
+
+    PollThread poller;
+    poller.init(receiver, sndio::DeviceState_Active | sndio::DeviceState_Closed,
+                NoDeadline);
+
+    CHECK(poller.start());
+    poller.wait_running();
+    core::sleep_for(core::ClockMonotonic, SettleDelay);
+
+    LONGS_EQUAL(status::StatusOK, receiver.close());
+
+    poller.join();
+
+    LONGS_EQUAL(status::StatusOK, poller.result());
+    CHECK(receiver.state() == sndio::DeviceState_Closed);
 }
 
 } // namespace pipeline
