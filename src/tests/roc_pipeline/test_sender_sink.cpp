@@ -975,9 +975,9 @@ TEST(sender_sink, reports_two_receivers) {
     }
 }
 
-// Deadline reported by refresh() is used by pipeline loop to schedule next
-// refresh, so it should never point to the past.
-TEST(sender_sink, refresh_deadline) {
+// Delay reported by refresh() is used by pipeline loop to schedule next
+// refresh, so it should always be positive when reported.
+TEST(sender_sink, refresh_delay) {
     init_with_defaults();
 
     packet::FifoQueue queue;
@@ -1001,30 +1001,30 @@ TEST(sender_sink, refresh_deadline) {
     {
         const core::nanoseconds_t refresh_ts = frame_writer.refresh_ts(unix_base);
 
-        core::nanoseconds_t deadline = 0;
-        LONGS_EQUAL(status::StatusOK, sender.refresh(refresh_ts, &deadline));
-        LONGS_EQUAL(0, deadline);
+        core::nanoseconds_t delay = 0;
+        LONGS_EQUAL(status::StatusOK, sender.refresh(refresh_ts, &delay));
+        LONGS_EQUAL(0, delay);
     }
 
-    size_t n_deadlines = 0;
+    size_t n_delays = 0;
 
     for (size_t nf = 0; nf < FramesPerPacket * 5; nf++) {
         frame_writer.write_samples(SamplesPerFrame, input_sample_spec, unix_base);
 
         const core::nanoseconds_t refresh_ts = frame_writer.refresh_ts();
 
-        core::nanoseconds_t deadline = 0;
-        LONGS_EQUAL(status::StatusOK, sender.refresh(refresh_ts, &deadline));
+        core::nanoseconds_t delay = 0;
+        LONGS_EQUAL(status::StatusOK, sender.refresh(refresh_ts, &delay));
 
-        // deadline is not reported until sender starts sending packets, but
-        // once it's reported, it should always point to the future
-        if (deadline != 0) {
-            CHECK(deadline > refresh_ts);
-            n_deadlines++;
+        // delay is not reported until sender starts sending packets, but
+        // once it's reported, it should always be positive
+        if (delay != 0) {
+            CHECK(delay > 0);
+            n_delays++;
         }
     }
 
-    CHECK(n_deadlines > 0);
+    CHECK(n_delays > 0);
 }
 
 // Sender is idle until a transport endpoint is added, and stays active after

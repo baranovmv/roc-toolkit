@@ -312,21 +312,22 @@ status::StatusCode ReceiverLoop::process_refresh_imp(core::nanoseconds_t& next_d
 }
 
 status::StatusCode ReceiverLoop::refresh_(core::nanoseconds_t& next_deadline) {
+    // Refresh works in unix clock domain and reports next refresh as a delay,
+    // which does not depend on clock domain. Pipeline loop schedules refreshes
+    // in its own clock domain, so convert delay to absolute deadline here.
     // Both timestamps should be obtained at the same point of time, so that
-    // the deadline reported below does not depend on refresh duration.
+    // the deadline does not depend on refresh duration.
     const core::nanoseconds_t unix_time = core::timestamp(core::ClockUnix);
-    const core::nanoseconds_t mono_time = core::timestamp(core::ClockMonotonic);
+    const core::nanoseconds_t loop_time = timestamp_imp();
 
-    core::nanoseconds_t unix_deadline = 0;
+    core::nanoseconds_t delay = 0;
 
-    const status::StatusCode code = source_.refresh(unix_time, &unix_deadline);
+    const status::StatusCode code = source_.refresh(unix_time, &delay);
     if (code != status::StatusOK) {
         return code;
     }
 
-    // Source reports deadline in unix clock domain, while pipeline loop
-    // schedules asynchronous work in monotonic clock domain.
-    next_deadline = unix_deadline == 0 ? 0 : mono_time + (unix_deadline - unix_time);
+    next_deadline = delay == 0 ? 0 : loop_time + delay;
 
     return status::StatusOK;
 }
