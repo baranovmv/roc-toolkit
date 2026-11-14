@@ -43,7 +43,8 @@ WavHeader::WavHeader(const uint16_t format_tag,
         // subchunk2_id
         core::EndianOps::swap_native_be<uint32_t>(0x64617461), // {'d','a','t','a'}
         // subchunk2_size
-        0) {
+        0)
+    , num_samples_(0) {
 }
 
 WavHeader::WavHeaderData::WavHeaderData(uint32_t chunk_id,
